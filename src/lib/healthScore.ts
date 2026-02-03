@@ -9,16 +9,31 @@ export type ProcessedFoodLevel = 'high' | 'medium' | 'low';
 export type WaterIntake = 'low' | 'adequate' | 'good';
 export type IllnessStatus = 'none' | 'mild' | 'severe';
 
-// Activity levels 1-5 with descriptive labels
+// Activity levels 1-5
 export type ActivityLevel = 1 | 2 | 3 | 4 | 5;
 
+// Sleep duration options (stored as hours)
+export type SleepDuration = 4.5 | 5.5 | 6.5 | 7.5 | 8.5 | 9.5 | 10.5;
+
+// ================== Labels ==================
+
 export const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
-    1: 'Almost no movement',
-    2: 'Light activity (short walks, household movement)',
-    3: 'Moderate activity (30–45 min walking)',
-    4: 'Active (sports, running, fitness)',
-    5: 'Intense training / very active day',
+    1: '1 – Almost no movement',
+    2: '2 – Light activity (short walks, household movement)',
+    3: '3 – Moderate activity (30–45 min walking)',
+    4: '4 – Active (sports, running, fitness)',
+    5: '5 – Intense training / very active day',
 };
+
+export const SLEEP_OPTIONS: { value: SleepDuration; label: string }[] = [
+    { value: 4.5, label: 'Less than 5 hours' },
+    { value: 5.5, label: '5–6 hours' },
+    { value: 6.5, label: '6–7 hours' },
+    { value: 7.5, label: '7–8 hours (ideal)' },
+    { value: 8.5, label: '8–9 hours (ideal)' },
+    { value: 9.5, label: '9–10 hours' },
+    { value: 10.5, label: 'More than 10 hours' },
+];
 
 // ================== Score Maps ==================
 
@@ -49,31 +64,19 @@ const ILLNESS_PENALTY_MAP: Record<IllnessStatus, number> = {
 // ================== Score Functions ==================
 
 /**
- * Calculate sleep score (0-100) using reverse-U curve model
- * Optimal: 7-9 hours = 100
- * Suboptimal: 6-7 or 9-10 = 80
- * Poor: 5-6 = 60
- * Bad: <5 or ≥10 = 40 - 10 penalty = 30
+ * Calculate sleep score (0-100) using penalty-only model
+ * Ideal: 7-9 hours = 100
+ * 6-7 or 9-10 hours = 85
+ * 5-6 or >10 hours = 65
+ * <5 hours = 40
  */
 export function calculateSleepScore(hours: number): number {
-    let baseScore: number;
-
-    if (hours >= 7 && hours < 9) {
-        baseScore = 100;
-    } else if (hours >= 6 && hours < 7) {
-        baseScore = 80;
-    } else if (hours >= 9 && hours < 10) {
-        baseScore = 80;
-    } else if (hours >= 5 && hours < 6) {
-        baseScore = 60;
-    } else {
-        baseScore = 40;
-    }
-
-    // Apply penalty for extreme values
-    const penalty = hours < 6 ? 10 : hours >= 10 ? 10 : 0;
-
-    return Math.max(0, baseScore - penalty);
+    if (hours >= 7 && hours <= 9) return 100;
+    if (hours >= 6 && hours < 7) return 85;
+    if (hours > 9 && hours <= 10) return 85;
+    if (hours >= 5 && hours < 6) return 65;
+    if (hours > 10) return 65;
+    return 40;
 }
 
 /**

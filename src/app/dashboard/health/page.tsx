@@ -5,13 +5,22 @@ import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
 import { HealthMetric, MealQuality, ProcessedFoodLevel, WaterIntake, IllnessStatus, ActivityLevel } from '@/types/database';
 import { formatDate, formatDateForInput } from '@/lib/utils';
-import { calculateHealthScore, getHealthScoreBreakdown, HealthScoreInput, ACTIVITY_LABELS } from '@/lib/healthScore';
+import {
+    calculateHealthScore,
+    getHealthScoreBreakdown,
+    HealthScoreInput,
+    ACTIVITY_LABELS,
+    SLEEP_OPTIONS,
+    SleepDuration,
+    calculateSleepScore,
+    calculateActivityScore
+} from '@/lib/healthScore';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import { Plus, Trash2, Moon, Activity as ActivityIcon, Heart, Loader2, Info, X } from 'lucide-react';
 
 interface FormData {
     date: string;
-    sleep_hours: string;
+    sleep_hours: SleepDuration | '';
     activity_level: ActivityLevel | '';
     meal_quality: MealQuality | '';
     processed_food_level: ProcessedFoodLevel | '';
@@ -42,7 +51,7 @@ export default function HealthPage() {
 
     // Calculate health score in real-time
     const scoreInput: HealthScoreInput = useMemo(() => ({
-        sleepHours: formData.sleep_hours ? parseFloat(formData.sleep_hours) : null,
+        sleepHours: formData.sleep_hours || null,
         activityLevel: formData.activity_level || null,
         mealQuality: formData.meal_quality || null,
         waterIntake: formData.water_intake || null,
@@ -52,6 +61,10 @@ export default function HealthPage() {
 
     const scoreBreakdown = useMemo(() => getHealthScoreBreakdown(scoreInput), [scoreInput]);
     const calculatedScore = scoreBreakdown.finalScore;
+
+    // Real-time score displays for individual fields
+    const currentSleepScore = formData.sleep_hours ? calculateSleepScore(formData.sleep_hours) : null;
+    const currentActivityScore = formData.activity_level ? calculateActivityScore(formData.activity_level) : null;
 
     const fetchMetrics = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -84,7 +97,7 @@ export default function HealthPage() {
         const { error } = await supabase.from('health_metrics').upsert({
             wallet_address: session.walletAddress.toLowerCase(),
             date: formData.date,
-            sleep_hours: formData.sleep_hours ? parseFloat(formData.sleep_hours) : null,
+            sleep_hours: formData.sleep_hours || null,
             activity_level: formData.activity_level || null,
             health_score: calculatedScore,
             meal_quality: formData.meal_quality || null,
@@ -152,52 +165,87 @@ export default function HealthPage() {
                 <div className="glass-dark rounded-2xl p-6 slide-in">
                     <h3 className="text-lg font-semibold mb-4">New Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* Row 1: Date, Sleep */}
+                        {/* Row 1: Date */}
+                        <div>
+                            <label className="block text-sm text-slate-400 mb-2">Date</label>
+                            <input
+                                type="date"
+                                value={formData.date}
+                                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                required
+                                className="max-w-xs"
+                            />
+                        </div>
+
+                        {/* Row 2: Sleep Duration (Dropdown) */}
                         <div className="grid md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Date</label>
-                                <input
-                                    type="date"
-                                    value={formData.date}
-                                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Sleep (hours)</label>
-                                <input
-                                    type="number"
-                                    step="0.5"
-                                    min="0"
-                                    max="24"
+                                <label className="block text-sm text-slate-400 mb-2">
+                                    Sleep Duration
+                                    <span className="ml-2 text-xs text-slate-500">(7–9 hours is optimal for adults)</span>
+                                </label>
+                                <select
                                     value={formData.sleep_hours}
-                                    onChange={(e) => setFormData({ ...formData, sleep_hours: e.target.value })}
-                                    placeholder="7.5"
-                                />
+                                    onChange={(e) => setFormData({
+                                        ...formData,
+                                        sleep_hours: e.target.value ? parseFloat(e.target.value) as SleepDuration : ''
+                                    })}
+                                    className="w-full"
+                                >
+                                    <option value="">Select sleep duration</option>
+                                    {SLEEP_OPTIONS.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex items-end">
+                                {currentSleepScore !== null && (
+                                    <div className={`
+                                        px-4 py-2 rounded-lg text-sm font-medium
+                                        ${currentSleepScore >= 85 ? 'bg-emerald-500/20 text-emerald-400' :
+                                            currentSleepScore >= 65 ? 'bg-amber-500/20 text-amber-400' :
+                                                'bg-red-500/20 text-red-400'}
+                                    `}>
+                                        Sleep score: {currentSleepScore}/100
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        {/* Row 2: Activity Level (1-5 dropdown) */}
-                        <div>
-                            <label className="block text-sm text-slate-400 mb-2">Activity Level</label>
-                            <select
-                                value={formData.activity_level}
-                                onChange={(e) => setFormData({
-                                    ...formData,
-                                    activity_level: e.target.value ? parseInt(e.target.value) as ActivityLevel : ''
-                                })}
-                                className="w-full"
-                            >
-                                <option value="">Select activity level</option>
-                                <option value="1">{ACTIVITY_LABELS[1]}</option>
-                                <option value="2">{ACTIVITY_LABELS[2]}</option>
-                                <option value="3">{ACTIVITY_LABELS[3]}</option>
-                                <option value="4">{ACTIVITY_LABELS[4]}</option>
-                                <option value="5">{ACTIVITY_LABELS[5]}</option>
-                            </select>
+                        {/* Row 3: Activity Level (Dropdown with numbers) */}
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-2">Activity Level</label>
+                                <select
+                                    value={formData.activity_level}
+                                    onChange={(e) => setFormData({
+                                        ...formData,
+                                        activity_level: e.target.value ? parseInt(e.target.value) as ActivityLevel : ''
+                                    })}
+                                    className="w-full"
+                                >
+                                    <option value="">Select activity level</option>
+                                    {([1, 2, 3, 4, 5] as ActivityLevel[]).map((level) => (
+                                        <option key={level} value={level}>{ACTIVITY_LABELS[level]}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex items-end">
+                                {currentActivityScore !== null && (
+                                    <div className={`
+                                        px-4 py-2 rounded-lg text-sm font-medium
+                                        ${currentActivityScore >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
+                                            currentActivityScore >= 60 ? 'bg-sky-500/20 text-sky-400' :
+                                                currentActivityScore >= 40 ? 'bg-amber-500/20 text-amber-400' :
+                                                    'bg-red-500/20 text-red-400'}
+                                    `}>
+                                        Activity score: {currentActivityScore}/100
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Row 3: Nutrition */}
+                        {/* Row 4: Nutrition */}
                         <div className="grid md:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Meal Quality</label>
@@ -240,7 +288,7 @@ export default function HealthPage() {
                             </div>
                         </div>
 
-                        {/* Row 4: Illness + Calculated Score */}
+                        {/* Row 5: Illness + Calculated Score */}
                         <div className="grid md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Illness Status</label>
