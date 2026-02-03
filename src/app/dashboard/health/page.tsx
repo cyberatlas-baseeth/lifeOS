@@ -290,15 +290,15 @@ export default function HealthPage() {
                                         </div>
                                         <div className="space-y-2 text-sm">
                                             <div className="flex justify-between">
-                                                <span className="text-slate-400">Sleep (×0.35)</span>
+                                                <span className="text-slate-400">Sleep (×0.40)</span>
                                                 <span className="text-violet-400">{scoreBreakdown.sleepScore}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-slate-400">Activity (×0.25)</span>
+                                                <span className="text-slate-400">Activity (×0.30)</span>
                                                 <span className="text-sky-400">{scoreBreakdown.activityScore}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-slate-400">Nutrition (×0.25)</span>
+                                                <span className="text-slate-400">Nutrition (×0.30)</span>
                                                 <span className="text-amber-400">{scoreBreakdown.nutritionScore}</span>
                                             </div>
                                             <div className="flex justify-between">

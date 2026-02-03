@@ -130,7 +130,10 @@ export interface HealthScoreBreakdown {
 
 /**
  * Calculate final health score (0-100) using weighted formula:
- * healthScore = (sleepScore * 0.35) + (activityScore * 0.25) + (nutritionScore * 0.25) - illnessPenalty
+ * healthScore = (sleepScore * 0.40) + (activityScore * 0.30) + (nutritionScore * 0.30) - illnessPenalty
+ * 
+ * Weights sum to 1.0, illness is applied as penalty after calculation
+ * A perfect day with no illness = 100
  */
 export function calculateHealthScore(input: HealthScoreInput): number {
     const breakdown = getHealthScoreBreakdown(input);
@@ -157,11 +160,14 @@ export function getHealthScoreBreakdown(input: HealthScoreInput): HealthScoreBre
 
     const illnessPenalty = getIllnessPenalty(input.illnessStatus);
 
-    const rawScore =
-        (sleepScore * 0.35) +
-        (activityScore * 0.25) +
-        (nutritionScore * 0.25) -
-        illnessPenalty;
+    // Weights: sleep 0.40, activity 0.30, nutrition 0.30 = 1.0
+    const weightedScore =
+        (sleepScore * 0.40) +
+        (activityScore * 0.30) +
+        (nutritionScore * 0.30);
+
+    // Illness penalty applied after weighted calculation
+    const rawScore = weightedScore - illnessPenalty;
 
     const finalScore = Math.max(0, Math.min(100, Math.round(rawScore)));
 
