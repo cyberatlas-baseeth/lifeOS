@@ -16,6 +16,12 @@ export interface Profile {
     updated_at: string;
 }
 
+// Nutrition types
+export type MealQuality = 'kötü' | 'normal' | 'iyi';
+export type ProcessedFoodLevel = 'yüksek' | 'orta' | 'düşük';
+export type WaterIntake = 'az' | 'yeterli' | 'iyi';
+export type IllnessStatus = 'none' | 'mild' | 'severe';
+
 export interface HealthMetric {
     id: string;
     wallet_address: string;
@@ -23,6 +29,10 @@ export interface HealthMetric {
     sleep_hours: number | null;
     activity_level: number | null;
     health_score: number | null;
+    meal_quality: MealQuality | null;
+    processed_food_level: ProcessedFoodLevel | null;
+    water_intake: WaterIntake | null;
+    illness_status: IllnessStatus | null;
     notes: string | null;
     created_at: string;
 }
@@ -88,7 +98,7 @@ export type ExpenseInput = Omit<Expense, 'id' | 'wallet_address' | 'created_at'>
 export type InvestmentInput = Omit<Investment, 'id' | 'wallet_address' | 'created_at'>;
 
 // Avatar state types
-export type AvatarStatus = 'thriving' | 'energetic' | 'stable' | 'tired' | 'stressed' | 'critical';
+export type AvatarStatus = 'thriving' | 'energetic' | 'stable' | 'tired' | 'stressed' | 'critical' | 'sick';
 
 export interface AvatarState {
     energy: number;      // 0-100

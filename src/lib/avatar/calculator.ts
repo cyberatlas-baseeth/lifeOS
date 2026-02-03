@@ -112,6 +112,7 @@ const STATUS_MESSAGES: Record<AvatarStatus, string> = {
     tired: 'You look a bit tired. Consider resting.',
     stressed: 'Stress level is high. Take time to relax.',
     critical: 'Warning! Multiple metrics are critical.',
+    sick: 'You are unwell. Focus on recovery.',
 };
 
 export function calculateAvatarState(metrics: AggregatedMetrics): AvatarState {
@@ -336,6 +337,12 @@ export function getAvatarColors(status: AvatarStatus): {
                 primary: '#ef4444', // red
                 secondary: '#f87171',
                 glow: 'rgba(239, 68, 68, 0.5)',
+            };
+        case 'sick':
+            return {
+                primary: '#a855f7', // purple
+                secondary: '#c084fc',
+                glow: 'rgba(168, 85, 247, 0.5)',
             };
     }
 }

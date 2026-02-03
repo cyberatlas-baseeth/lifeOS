@@ -1,12 +1,35 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
-import { HealthMetric } from '@/types/database';
+import { HealthMetric, MealQuality, ProcessedFoodLevel, WaterIntake, IllnessStatus } from '@/types/database';
 import { formatDate, formatDateForInput } from '@/lib/utils';
+import { calculateHealthScore, getHealthScoreBreakdown, HealthScoreInput } from '@/lib/healthScore';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
-import { Plus, Trash2, Moon, Activity as ActivityIcon, Heart, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Moon, Activity as ActivityIcon, Heart, Loader2, Info, X } from 'lucide-react';
+
+interface FormData {
+    date: string;
+    sleep_hours: string;
+    activity_level: string;
+    meal_quality: MealQuality | '';
+    processed_food_level: ProcessedFoodLevel | '';
+    water_intake: WaterIntake | '';
+    illness_status: IllnessStatus | '';
+    notes: string;
+}
+
+const initialFormData: FormData = {
+    date: formatDateForInput(),
+    sleep_hours: '',
+    activity_level: '',
+    meal_quality: '',
+    processed_food_level: '',
+    water_intake: '',
+    illness_status: '',
+    notes: '',
+};
 
 export default function HealthPage() {
     const { session } = useWallet();
@@ -14,14 +37,21 @@ export default function HealthPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    const [showTooltip, setShowTooltip] = useState(false);
+    const [formData, setFormData] = useState<FormData>(initialFormData);
 
-    const [formData, setFormData] = useState({
-        date: formatDateForInput(),
-        sleep_hours: '',
-        activity_level: '',
-        health_score: '',
-        notes: '',
-    });
+    // Calculate health score in real-time
+    const scoreInput: HealthScoreInput = useMemo(() => ({
+        sleepHours: formData.sleep_hours ? parseFloat(formData.sleep_hours) : null,
+        activityLevel: formData.activity_level ? parseInt(formData.activity_level) : null,
+        mealQuality: formData.meal_quality || null,
+        waterIntake: formData.water_intake || null,
+        processedFoodLevel: formData.processed_food_level || null,
+        illnessStatus: formData.illness_status || null,
+    }), [formData]);
+
+    const scoreBreakdown = useMemo(() => getHealthScoreBreakdown(scoreInput), [scoreInput]);
+    const calculatedScore = scoreBreakdown.finalScore;
 
     const fetchMetrics = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -56,20 +86,18 @@ export default function HealthPage() {
             date: formData.date,
             sleep_hours: formData.sleep_hours ? parseFloat(formData.sleep_hours) : null,
             activity_level: formData.activity_level ? parseInt(formData.activity_level) : null,
-            health_score: formData.health_score ? parseInt(formData.health_score) : null,
+            health_score: calculatedScore,
+            meal_quality: formData.meal_quality || null,
+            processed_food_level: formData.processed_food_level || null,
+            water_intake: formData.water_intake || null,
+            illness_status: formData.illness_status || null,
             notes: formData.notes || null,
         }, {
             onConflict: 'wallet_address,date',
         });
 
         if (!error) {
-            setFormData({
-                date: formatDateForInput(),
-                sleep_hours: '',
-                activity_level: '',
-                health_score: '',
-                notes: '',
-            });
+            setFormData(initialFormData);
             setShowForm(false);
             fetchMetrics();
         }
@@ -107,7 +135,7 @@ export default function HealthPage() {
                 <div>
                     <h1 className="text-2xl font-bold">Sağlık Metrikleri</h1>
                     <p className="text-slate-400 text-sm mt-1">
-                        Uyku, aktivite ve genel sağlık durumunu takip et
+                        Uyku, aktivite, beslenme ve genel sağlık durumunu takip et
                     </p>
                 </div>
                 <button
@@ -124,7 +152,8 @@ export default function HealthPage() {
                 <div className="glass-dark rounded-2xl p-6 slide-in">
                     <h3 className="text-lg font-semibold mb-4">Yeni Kayıt</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* Row 1: Date, Sleep, Activity */}
+                        <div className="grid md:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Tarih</label>
                                 <input
@@ -157,18 +186,127 @@ export default function HealthPage() {
                                     placeholder="5"
                                 />
                             </div>
+                        </div>
+
+                        {/* Row 2: Nutrition */}
+                        <div className="grid md:grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Sağlık Skoru (0-100)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    value={formData.health_score}
-                                    onChange={(e) => setFormData({ ...formData, health_score: e.target.value })}
-                                    placeholder="75"
-                                />
+                                <label className="block text-sm text-slate-400 mb-2">Öğün Düzeni</label>
+                                <select
+                                    value={formData.meal_quality}
+                                    onChange={(e) => setFormData({ ...formData, meal_quality: e.target.value as MealQuality | '' })}
+                                    className="w-full"
+                                >
+                                    <option value="">Seçiniz</option>
+                                    <option value="kötü">Kötü</option>
+                                    <option value="normal">Normal</option>
+                                    <option value="iyi">İyi</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-2">İşlenmiş Gıda</label>
+                                <select
+                                    value={formData.processed_food_level}
+                                    onChange={(e) => setFormData({ ...formData, processed_food_level: e.target.value as ProcessedFoodLevel | '' })}
+                                    className="w-full"
+                                >
+                                    <option value="">Seçiniz</option>
+                                    <option value="yüksek">Yüksek</option>
+                                    <option value="orta">Orta</option>
+                                    <option value="düşük">Düşük</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-2">Su Tüketimi</label>
+                                <select
+                                    value={formData.water_intake}
+                                    onChange={(e) => setFormData({ ...formData, water_intake: e.target.value as WaterIntake | '' })}
+                                    className="w-full"
+                                >
+                                    <option value="">Seçiniz</option>
+                                    <option value="az">Az</option>
+                                    <option value="yeterli">Yeterli</option>
+                                    <option value="iyi">İyi</option>
+                                </select>
                             </div>
                         </div>
+
+                        {/* Row 3: Illness + Calculated Score */}
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-2">Hastalık Durumu</label>
+                                <select
+                                    value={formData.illness_status}
+                                    onChange={(e) => setFormData({ ...formData, illness_status: e.target.value as IllnessStatus | '' })}
+                                    className="w-full"
+                                >
+                                    <option value="">Seçiniz</option>
+                                    <option value="none">Yok</option>
+                                    <option value="mild">Hafif Hasta</option>
+                                    <option value="severe">Ciddi Hasta</option>
+                                </select>
+                            </div>
+                            <div className="relative">
+                                <label className="block text-sm text-slate-400 mb-2 flex items-center gap-2">
+                                    Sağlık Skoru
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowTooltip(!showTooltip)}
+                                        className="text-slate-500 hover:text-primary-400 transition-colors"
+                                    >
+                                        <Info className="w-4 h-4" />
+                                    </button>
+                                </label>
+                                <div className={`
+                                    w-full px-4 py-3 rounded-xl font-bold text-lg text-center
+                                    ${calculatedScore >= 70 ? 'bg-emerald-500/20 text-emerald-400' :
+                                        calculatedScore >= 40 ? 'bg-amber-500/20 text-amber-400' :
+                                            'bg-red-500/20 text-red-400'}
+                                `}>
+                                    {calculatedScore}/100
+                                </div>
+
+                                {/* Tooltip */}
+                                {showTooltip && (
+                                    <div className="absolute top-full left-0 mt-2 p-4 bg-slate-800 rounded-xl shadow-xl border border-slate-700 z-50 w-72">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="font-semibold text-sm">Skor Nasıl Hesaplandı?</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowTooltip(false)}
+                                                className="text-slate-500 hover:text-white"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <div className="space-y-2 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-400">Uyku (×0.35)</span>
+                                                <span className="text-violet-400">{scoreBreakdown.sleepScore}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-400">Aktivite (×0.25)</span>
+                                                <span className="text-sky-400">{scoreBreakdown.activityScore}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-400">Beslenme (×0.25)</span>
+                                                <span className="text-amber-400">{scoreBreakdown.nutritionScore}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-400">Hastalık Cezası</span>
+                                                <span className="text-red-400">-{scoreBreakdown.illnessPenalty}</span>
+                                            </div>
+                                            <div className="border-t border-slate-700 pt-2 mt-2 flex justify-between font-semibold">
+                                                <span>Toplam</span>
+                                                <span className="text-emerald-400">{scoreBreakdown.finalScore}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Notes */}
                         <div>
                             <label className="block text-sm text-slate-400 mb-2">Notlar</label>
                             <textarea
@@ -178,6 +316,8 @@ export default function HealthPage() {
                                 rows={2}
                             />
                         </div>
+
+                        {/* Actions */}
                         <div className="flex justify-end gap-3">
                             <button
                                 type="button"
@@ -287,8 +427,9 @@ export default function HealthPage() {
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tarih</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Uyku</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Aktivite</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Beslenme</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Hastalık</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Skor</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Notlar</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
                             </thead>
@@ -299,17 +440,39 @@ export default function HealthPage() {
                                         <td className="px-4 py-3 text-sm">{metric.sleep_hours || '-'} saat</td>
                                         <td className="px-4 py-3 text-sm">{metric.activity_level || '-'}/10</td>
                                         <td className="px-4 py-3 text-sm">
+                                            {metric.meal_quality ? (
+                                                <span className={`
+                                                    px-2 py-1 rounded-full text-xs font-medium
+                                                    ${metric.meal_quality === 'iyi' ? 'bg-emerald-500/20 text-emerald-400' :
+                                                        metric.meal_quality === 'normal' ? 'bg-amber-500/20 text-amber-400' :
+                                                            'bg-red-500/20 text-red-400'}
+                                                `}>
+                                                    {metric.meal_quality}
+                                                </span>
+                                            ) : '-'}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm">
+                                            {metric.illness_status && metric.illness_status !== 'none' ? (
+                                                <span className={`
+                                                    px-2 py-1 rounded-full text-xs font-medium
+                                                    ${metric.illness_status === 'mild' ? 'bg-amber-500/20 text-amber-400' :
+                                                        'bg-red-500/20 text-red-400'}
+                                                `}>
+                                                    {metric.illness_status === 'mild' ? 'Hafif' : 'Ciddi'}
+                                                </span>
+                                            ) : (
+                                                <span className="text-slate-500">Yok</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm">
                                             <span className={`
-                        px-2 py-1 rounded-full text-xs font-medium
-                        ${(metric.health_score || 0) >= 70 ? 'bg-emerald-500/20 text-emerald-400' :
+                                                px-2 py-1 rounded-full text-xs font-medium
+                                                ${(metric.health_score || 0) >= 70 ? 'bg-emerald-500/20 text-emerald-400' :
                                                     (metric.health_score || 0) >= 40 ? 'bg-amber-500/20 text-amber-400' :
                                                         'bg-red-500/20 text-red-400'}
-                      `}>
+                                            `}>
                                                 {metric.health_score || '-'}
                                             </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-slate-400 max-w-xs truncate">
-                                            {metric.notes || '-'}
                                         </td>
                                         <td className="px-4 py-3">
                                             <button
