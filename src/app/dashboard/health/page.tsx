@@ -3,16 +3,16 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
-import { HealthMetric, MealQuality, ProcessedFoodLevel, WaterIntake, IllnessStatus } from '@/types/database';
+import { HealthMetric, MealQuality, ProcessedFoodLevel, WaterIntake, IllnessStatus, ActivityLevel } from '@/types/database';
 import { formatDate, formatDateForInput } from '@/lib/utils';
-import { calculateHealthScore, getHealthScoreBreakdown, HealthScoreInput } from '@/lib/healthScore';
+import { calculateHealthScore, getHealthScoreBreakdown, HealthScoreInput, ACTIVITY_LABELS } from '@/lib/healthScore';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import { Plus, Trash2, Moon, Activity as ActivityIcon, Heart, Loader2, Info, X } from 'lucide-react';
 
 interface FormData {
     date: string;
     sleep_hours: string;
-    activity_level: string;
+    activity_level: ActivityLevel | '';
     meal_quality: MealQuality | '';
     processed_food_level: ProcessedFoodLevel | '';
     water_intake: WaterIntake | '';
@@ -43,7 +43,7 @@ export default function HealthPage() {
     // Calculate health score in real-time
     const scoreInput: HealthScoreInput = useMemo(() => ({
         sleepHours: formData.sleep_hours ? parseFloat(formData.sleep_hours) : null,
-        activityLevel: formData.activity_level ? parseInt(formData.activity_level) : null,
+        activityLevel: formData.activity_level || null,
         mealQuality: formData.meal_quality || null,
         waterIntake: formData.water_intake || null,
         processedFoodLevel: formData.processed_food_level || null,
@@ -85,7 +85,7 @@ export default function HealthPage() {
             wallet_address: session.walletAddress.toLowerCase(),
             date: formData.date,
             sleep_hours: formData.sleep_hours ? parseFloat(formData.sleep_hours) : null,
-            activity_level: formData.activity_level ? parseInt(formData.activity_level) : null,
+            activity_level: formData.activity_level || null,
             health_score: calculatedScore,
             meal_quality: formData.meal_quality || null,
             processed_food_level: formData.processed_food_level || null,
@@ -116,7 +116,7 @@ export default function HealthPage() {
         .map((m) => ({
             date: m.date,
             sleep: m.sleep_hours || 0,
-            activity: m.activity_level || 0,
+            activity: (m.activity_level || 3) * 20,
             score: m.health_score || 0,
         }));
 
@@ -133,9 +133,9 @@ export default function HealthPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Sağlık Metrikleri</h1>
+                    <h1 className="text-2xl font-bold">Health Metrics</h1>
                     <p className="text-slate-400 text-sm mt-1">
-                        Uyku, aktivite, beslenme ve genel sağlık durumunu takip et
+                        Track your sleep, activity, nutrition, and overall health
                     </p>
                 </div>
                 <button
@@ -143,19 +143,19 @@ export default function HealthPage() {
                     className="btn btn-primary"
                 >
                     <Plus className="w-4 h-4" />
-                    Veri Ekle
+                    Add Entry
                 </button>
             </div>
 
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">Yeni Kayıt</h3>
+                    <h3 className="text-lg font-semibold mb-4">New Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* Row 1: Date, Sleep, Activity */}
-                        <div className="grid md:grid-cols-3 gap-4">
+                        {/* Row 1: Date, Sleep */}
+                        <div className="grid md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Tarih</label>
+                                <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
                                     type="date"
                                     value={formData.date}
@@ -164,7 +164,7 @@ export default function HealthPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Uyku (saat)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Sleep (hours)</label>
                                 <input
                                     type="number"
                                     step="0.5"
@@ -175,80 +175,89 @@ export default function HealthPage() {
                                     placeholder="7.5"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Aktivite (1-10)</label>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    max="10"
-                                    value={formData.activity_level}
-                                    onChange={(e) => setFormData({ ...formData, activity_level: e.target.value })}
-                                    placeholder="5"
-                                />
-                            </div>
                         </div>
 
-                        {/* Row 2: Nutrition */}
+                        {/* Row 2: Activity Level (1-5 dropdown) */}
+                        <div>
+                            <label className="block text-sm text-slate-400 mb-2">Activity Level</label>
+                            <select
+                                value={formData.activity_level}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    activity_level: e.target.value ? parseInt(e.target.value) as ActivityLevel : ''
+                                })}
+                                className="w-full"
+                            >
+                                <option value="">Select activity level</option>
+                                <option value="1">{ACTIVITY_LABELS[1]}</option>
+                                <option value="2">{ACTIVITY_LABELS[2]}</option>
+                                <option value="3">{ACTIVITY_LABELS[3]}</option>
+                                <option value="4">{ACTIVITY_LABELS[4]}</option>
+                                <option value="5">{ACTIVITY_LABELS[5]}</option>
+                            </select>
+                        </div>
+
+                        {/* Row 3: Nutrition */}
                         <div className="grid md:grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Öğün Düzeni</label>
+                                <label className="block text-sm text-slate-400 mb-2">Meal Quality</label>
                                 <select
                                     value={formData.meal_quality}
                                     onChange={(e) => setFormData({ ...formData, meal_quality: e.target.value as MealQuality | '' })}
                                     className="w-full"
                                 >
-                                    <option value="">Seçiniz</option>
-                                    <option value="kötü">Kötü</option>
+                                    <option value="">Select</option>
+                                    <option value="poor">Poor</option>
                                     <option value="normal">Normal</option>
-                                    <option value="iyi">İyi</option>
+                                    <option value="good">Good</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">İşlenmiş Gıda</label>
+                                <label className="block text-sm text-slate-400 mb-2">Processed Food</label>
                                 <select
                                     value={formData.processed_food_level}
                                     onChange={(e) => setFormData({ ...formData, processed_food_level: e.target.value as ProcessedFoodLevel | '' })}
                                     className="w-full"
                                 >
-                                    <option value="">Seçiniz</option>
-                                    <option value="yüksek">Yüksek</option>
-                                    <option value="orta">Orta</option>
-                                    <option value="düşük">Düşük</option>
+                                    <option value="">Select</option>
+                                    <option value="high">High</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="low">Low</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Su Tüketimi</label>
+                                <label className="block text-sm text-slate-400 mb-2">Water Intake</label>
                                 <select
                                     value={formData.water_intake}
                                     onChange={(e) => setFormData({ ...formData, water_intake: e.target.value as WaterIntake | '' })}
                                     className="w-full"
                                 >
-                                    <option value="">Seçiniz</option>
-                                    <option value="az">Az</option>
-                                    <option value="yeterli">Yeterli</option>
-                                    <option value="iyi">İyi</option>
+                                    <option value="">Select</option>
+                                    <option value="low">Low</option>
+                                    <option value="adequate">Adequate</option>
+                                    <option value="good">Good</option>
                                 </select>
                             </div>
                         </div>
 
-                        {/* Row 3: Illness + Calculated Score */}
+                        {/* Row 4: Illness + Calculated Score */}
                         <div className="grid md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Hastalık Durumu</label>
+                                <label className="block text-sm text-slate-400 mb-2">Illness Status</label>
                                 <select
                                     value={formData.illness_status}
                                     onChange={(e) => setFormData({ ...formData, illness_status: e.target.value as IllnessStatus | '' })}
                                     className="w-full"
                                 >
-                                    <option value="">Seçiniz</option>
-                                    <option value="none">Yok</option>
-                                    <option value="mild">Hafif Hasta</option>
-                                    <option value="severe">Ciddi Hasta</option>
+                                    <option value="">Select</option>
+                                    <option value="none">None</option>
+                                    <option value="mild">Mild</option>
+                                    <option value="severe">Severe</option>
                                 </select>
                             </div>
                             <div className="relative">
                                 <label className="block text-sm text-slate-400 mb-2 flex items-center gap-2">
-                                    Sağlık Skoru
+                                    Health Score
                                     <button
                                         type="button"
                                         onClick={() => setShowTooltip(!showTooltip)}
@@ -270,7 +279,7 @@ export default function HealthPage() {
                                 {showTooltip && (
                                     <div className="absolute top-full left-0 mt-2 p-4 bg-slate-800 rounded-xl shadow-xl border border-slate-700 z-50 w-72">
                                         <div className="flex items-center justify-between mb-3">
-                                            <span className="font-semibold text-sm">Skor Nasıl Hesaplandı?</span>
+                                            <span className="font-semibold text-sm">How is this calculated?</span>
                                             <button
                                                 type="button"
                                                 onClick={() => setShowTooltip(false)}
@@ -281,23 +290,23 @@ export default function HealthPage() {
                                         </div>
                                         <div className="space-y-2 text-sm">
                                             <div className="flex justify-between">
-                                                <span className="text-slate-400">Uyku (×0.35)</span>
+                                                <span className="text-slate-400">Sleep (×0.35)</span>
                                                 <span className="text-violet-400">{scoreBreakdown.sleepScore}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-slate-400">Aktivite (×0.25)</span>
+                                                <span className="text-slate-400">Activity (×0.25)</span>
                                                 <span className="text-sky-400">{scoreBreakdown.activityScore}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-slate-400">Beslenme (×0.25)</span>
+                                                <span className="text-slate-400">Nutrition (×0.25)</span>
                                                 <span className="text-amber-400">{scoreBreakdown.nutritionScore}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-slate-400">Hastalık Cezası</span>
+                                                <span className="text-slate-400">Illness Penalty</span>
                                                 <span className="text-red-400">-{scoreBreakdown.illnessPenalty}</span>
                                             </div>
                                             <div className="border-t border-slate-700 pt-2 mt-2 flex justify-between font-semibold">
-                                                <span>Toplam</span>
+                                                <span>Total</span>
                                                 <span className="text-emerald-400">{scoreBreakdown.finalScore}</span>
                                             </div>
                                         </div>
@@ -308,11 +317,11 @@ export default function HealthPage() {
 
                         {/* Notes */}
                         <div>
-                            <label className="block text-sm text-slate-400 mb-2">Notlar</label>
+                            <label className="block text-sm text-slate-400 mb-2">Notes</label>
                             <textarea
                                 value={formData.notes}
                                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                placeholder="Bugün nasıl hissediyorsun?"
+                                placeholder="How are you feeling today?"
                                 rows={2}
                             />
                         </div>
@@ -324,14 +333,14 @@ export default function HealthPage() {
                                 onClick={() => setShowForm(false)}
                                 className="btn btn-secondary"
                             >
-                                İptal
+                                Cancel
                             </button>
                             <button
                                 type="submit"
                                 disabled={saving}
                                 className="btn btn-primary"
                             >
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Kaydet'}
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
                             </button>
                         </div>
                     </form>
@@ -346,11 +355,11 @@ export default function HealthPage() {
                             <div className="w-10 h-10 rounded-lg bg-violet-500/20 flex items-center justify-center">
                                 <Moon className="w-5 h-5 text-violet-400" />
                             </div>
-                            <span className="text-slate-400">Ortalama Uyku</span>
+                            <span className="text-slate-400">Avg Sleep</span>
                         </div>
                         <p className="text-3xl font-bold">
                             {(metrics.reduce((sum, m) => sum + Number(m.sleep_hours || 0), 0) / metrics.filter(m => m.sleep_hours).length || 0).toFixed(1)}
-                            <span className="text-lg text-slate-500 ml-1">saat</span>
+                            <span className="text-lg text-slate-500 ml-1">hrs</span>
                         </p>
                     </div>
 
@@ -359,11 +368,11 @@ export default function HealthPage() {
                             <div className="w-10 h-10 rounded-lg bg-sky-500/20 flex items-center justify-center">
                                 <ActivityIcon className="w-5 h-5 text-sky-400" />
                             </div>
-                            <span className="text-slate-400">Ortalama Aktivite</span>
+                            <span className="text-slate-400">Avg Activity</span>
                         </div>
                         <p className="text-3xl font-bold">
                             {(metrics.reduce((sum, m) => sum + Number(m.activity_level || 0), 0) / metrics.filter(m => m.activity_level).length || 0).toFixed(1)}
-                            <span className="text-lg text-slate-500 ml-1">/10</span>
+                            <span className="text-lg text-slate-500 ml-1">/5</span>
                         </p>
                     </div>
 
@@ -372,7 +381,7 @@ export default function HealthPage() {
                             <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
                                 <Heart className="w-5 h-5 text-emerald-400" />
                             </div>
-                            <span className="text-slate-400">Ortalama Skor</span>
+                            <span className="text-slate-400">Avg Score</span>
                         </div>
                         <p className="text-3xl font-bold">
                             {(metrics.reduce((sum, m) => sum + Number(m.health_score || 0), 0) / metrics.filter(m => m.health_score).length || 0).toFixed(0)}
@@ -385,12 +394,12 @@ export default function HealthPage() {
             {/* Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Trend Grafiği</h3>
+                    <h3 className="text-lg font-semibold mb-4">Trend Chart</h3>
                     <TimeSeriesChart
                         data={chartData}
                         lines={[
-                            { dataKey: 'sleep', name: 'Uyku (saat)', color: '#8b5cf6' },
-                            { dataKey: 'activity', name: 'Aktivite', color: '#38bdf8' },
+                            { dataKey: 'sleep', name: 'Sleep (hrs)', color: '#8b5cf6' },
+                            { dataKey: 'activity', name: 'Activity', color: '#38bdf8' },
                         ]}
                         height={300}
                     />
@@ -400,11 +409,11 @@ export default function HealthPage() {
             {/* Health Score Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Sağlık Skoru</h3>
+                    <h3 className="text-lg font-semibold mb-4">Health Score</h3>
                     <TimeSeriesChart
                         data={chartData}
                         lines={[
-                            { dataKey: 'score', name: 'Sağlık Skoru', color: '#10b981' },
+                            { dataKey: 'score', name: 'Health Score', color: '#10b981' },
                         ]}
                         height={250}
                         showLegend={false}
@@ -414,22 +423,22 @@ export default function HealthPage() {
 
             {/* Data Table */}
             <div className="glass-dark rounded-2xl p-6">
-                <h3 className="text-lg font-semibold mb-4">Son Kayıtlar</h3>
+                <h3 className="text-lg font-semibold mb-4">Recent Entries</h3>
                 {metrics.length === 0 ? (
                     <p className="text-slate-500 text-center py-8">
-                        Henüz veri yok. Yukarıdaki butona tıklayarak veri ekleyin.
+                        No data yet. Click the button above to add an entry.
                     </p>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-700/50">
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tarih</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Uyku</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Aktivite</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Beslenme</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Hastalık</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Skor</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Sleep</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Activity</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Nutrition</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Illness</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Score</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
                             </thead>
@@ -437,13 +446,13 @@ export default function HealthPage() {
                                 {metrics.map((metric) => (
                                     <tr key={metric.id} className="border-b border-slate-700/30 hover:bg-slate-700/20">
                                         <td className="px-4 py-3 text-sm">{formatDate(metric.date)}</td>
-                                        <td className="px-4 py-3 text-sm">{metric.sleep_hours || '-'} saat</td>
-                                        <td className="px-4 py-3 text-sm">{metric.activity_level || '-'}/10</td>
+                                        <td className="px-4 py-3 text-sm">{metric.sleep_hours || '-'} hrs</td>
+                                        <td className="px-4 py-3 text-sm">{metric.activity_level || '-'}/5</td>
                                         <td className="px-4 py-3 text-sm">
                                             {metric.meal_quality ? (
                                                 <span className={`
                                                     px-2 py-1 rounded-full text-xs font-medium
-                                                    ${metric.meal_quality === 'iyi' ? 'bg-emerald-500/20 text-emerald-400' :
+                                                    ${metric.meal_quality === 'good' ? 'bg-emerald-500/20 text-emerald-400' :
                                                         metric.meal_quality === 'normal' ? 'bg-amber-500/20 text-amber-400' :
                                                             'bg-red-500/20 text-red-400'}
                                                 `}>
@@ -458,10 +467,10 @@ export default function HealthPage() {
                                                     ${metric.illness_status === 'mild' ? 'bg-amber-500/20 text-amber-400' :
                                                         'bg-red-500/20 text-red-400'}
                                                 `}>
-                                                    {metric.illness_status === 'mild' ? 'Hafif' : 'Ciddi'}
+                                                    {metric.illness_status}
                                                 </span>
                                             ) : (
-                                                <span className="text-slate-500">Yok</span>
+                                                <span className="text-slate-500">None</span>
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-sm">

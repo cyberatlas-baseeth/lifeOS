@@ -16,18 +16,19 @@ export interface Profile {
     updated_at: string;
 }
 
-// Nutrition types
-export type MealQuality = 'kötü' | 'normal' | 'iyi';
-export type ProcessedFoodLevel = 'yüksek' | 'orta' | 'düşük';
-export type WaterIntake = 'az' | 'yeterli' | 'iyi';
+// Nutrition types (English only)
+export type MealQuality = 'poor' | 'normal' | 'good';
+export type ProcessedFoodLevel = 'high' | 'medium' | 'low';
+export type WaterIntake = 'low' | 'adequate' | 'good';
 export type IllnessStatus = 'none' | 'mild' | 'severe';
+export type ActivityLevel = 1 | 2 | 3 | 4 | 5;
 
 export interface HealthMetric {
     id: string;
     wallet_address: string;
     date: string;
     sleep_hours: number | null;
-    activity_level: number | null;
+    activity_level: ActivityLevel | null;
     health_score: number | null;
     meal_quality: MealQuality | null;
     processed_food_level: ProcessedFoodLevel | null;

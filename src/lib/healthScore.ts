@@ -1,31 +1,43 @@
 // Health Score Calculation Utilities
 // All scoring logic in one place for consistency
+// ALL LABELS AND VALUES IN ENGLISH
 
-import {
-    MealQuality,
-    ProcessedFoodLevel,
-    WaterIntake,
-    IllnessStatus,
-} from '@/types/database';
+// ================== Type Definitions ==================
+
+export type MealQuality = 'poor' | 'normal' | 'good';
+export type ProcessedFoodLevel = 'high' | 'medium' | 'low';
+export type WaterIntake = 'low' | 'adequate' | 'good';
+export type IllnessStatus = 'none' | 'mild' | 'severe';
+
+// Activity levels 1-5 with descriptive labels
+export type ActivityLevel = 1 | 2 | 3 | 4 | 5;
+
+export const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
+    1: 'Almost no movement',
+    2: 'Light activity (short walks, household movement)',
+    3: 'Moderate activity (30–45 min walking)',
+    4: 'Active (sports, running, fitness)',
+    5: 'Intense training / very active day',
+};
 
 // ================== Score Maps ==================
 
 const MEAL_SCORE_MAP: Record<MealQuality, number> = {
-    'kötü': 40,
+    'poor': 40,
     'normal': 70,
-    'iyi': 100,
+    'good': 100,
 };
 
 const WATER_SCORE_MAP: Record<WaterIntake, number> = {
-    'az': 40,
-    'yeterli': 70,
-    'iyi': 100,
+    'low': 40,
+    'adequate': 70,
+    'good': 100,
 };
 
 const PROCESSED_PENALTY_MAP: Record<ProcessedFoodLevel, number> = {
-    'yüksek': -20,
-    'orta': -10,
-    'düşük': 0,
+    'high': -20,
+    'medium': -10,
+    'low': 0,
 };
 
 const ILLNESS_PENALTY_MAP: Record<IllnessStatus, number> = {
@@ -37,23 +49,39 @@ const ILLNESS_PENALTY_MAP: Record<IllnessStatus, number> = {
 // ================== Score Functions ==================
 
 /**
- * Calculate sleep score (0-100) based on hours
- * 7-8h = 100, 6-7h = 80, 5-6h = 60, <5h = 40, >8h = 70
+ * Calculate sleep score (0-100) using reverse-U curve model
+ * Optimal: 7-9 hours = 100
+ * Suboptimal: 6-7 or 9-10 = 80
+ * Poor: 5-6 = 60
+ * Bad: <5 or ≥10 = 40 - 10 penalty = 30
  */
 export function calculateSleepScore(hours: number): number {
-    if (hours >= 7 && hours <= 8) return 100;
-    if (hours >= 6 && hours < 7) return 80;
-    if (hours >= 5 && hours < 6) return 60;
-    if (hours < 5) return 40;
-    if (hours > 8) return 70;
-    return 60;
+    let baseScore: number;
+
+    if (hours >= 7 && hours < 9) {
+        baseScore = 100;
+    } else if (hours >= 6 && hours < 7) {
+        baseScore = 80;
+    } else if (hours >= 9 && hours < 10) {
+        baseScore = 80;
+    } else if (hours >= 5 && hours < 6) {
+        baseScore = 60;
+    } else {
+        baseScore = 40;
+    }
+
+    // Apply penalty for extreme values
+    const penalty = hours < 6 ? 10 : hours >= 10 ? 10 : 0;
+
+    return Math.max(0, baseScore - penalty);
 }
 
 /**
- * Convert activity level (1-10) to score (0-100)
+ * Convert activity level (1-5) to score (0-100)
+ * Each level = 20 points
  */
-export function calculateActivityScore(level: number): number {
-    return Math.min(100, Math.max(0, level * 10));
+export function calculateActivityScore(level: ActivityLevel): number {
+    return level * 20;
 }
 
 /**
@@ -83,7 +111,7 @@ export function getIllnessPenalty(illness: IllnessStatus | null): number {
 
 export interface HealthScoreInput {
     sleepHours: number | null;
-    activityLevel: number | null;
+    activityLevel: ActivityLevel | null;
     mealQuality: MealQuality | null;
     waterIntake: WaterIntake | null;
     processedFoodLevel: ProcessedFoodLevel | null;
@@ -119,7 +147,7 @@ export function getHealthScoreBreakdown(input: HealthScoreInput): HealthScoreBre
 
     const activityScore = input.activityLevel !== null
         ? calculateActivityScore(input.activityLevel)
-        : 50; // default
+        : 60; // default (level 3)
 
     const nutritionScore = calculateNutritionScore(
         input.mealQuality,
