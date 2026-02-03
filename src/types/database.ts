@@ -1,0 +1,185 @@
+// Database types for LifeOS - MetaMask wallet-based auth
+
+export interface WalletNonce {
+    wallet_address: string;
+    nonce: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface Profile {
+    id: string;
+    wallet_address: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface HealthMetric {
+    id: string;
+    wallet_address: string;
+    date: string;
+    sleep_hours: number | null;
+    activity_level: number | null;
+    health_score: number | null;
+    notes: string | null;
+    created_at: string;
+}
+
+export interface PsychologyMetric {
+    id: string;
+    wallet_address: string;
+    date: string;
+    mood: number | null;
+    stress: number | null;
+    motivation: number | null;
+    notes: string | null;
+    created_at: string;
+}
+
+export interface NetWorth {
+    id: string;
+    wallet_address: string;
+    date: string;
+    total_assets: number | null;
+    cash: number | null;
+    notes: string | null;
+    created_at: string;
+}
+
+export interface Income {
+    id: string;
+    wallet_address: string;
+    date: string;
+    category: 'regular' | 'additional';
+    amount: number;
+    description: string | null;
+    created_at: string;
+}
+
+export interface Expense {
+    id: string;
+    wallet_address: string;
+    date: string;
+    category: 'fixed' | 'variable';
+    amount: number;
+    description: string | null;
+    created_at: string;
+}
+
+export interface Investment {
+    id: string;
+    wallet_address: string;
+    date: string;
+    investment_type: string;
+    amount: number;
+    profit_loss: number | null;
+    notes: string | null;
+    created_at: string;
+}
+
+// Form input types (for creating/updating)
+export type HealthMetricInput = Omit<HealthMetric, 'id' | 'wallet_address' | 'created_at'>;
+export type PsychologyMetricInput = Omit<PsychologyMetric, 'id' | 'wallet_address' | 'created_at'>;
+export type NetWorthInput = Omit<NetWorth, 'id' | 'wallet_address' | 'created_at'>;
+export type IncomeInput = Omit<Income, 'id' | 'wallet_address' | 'created_at'>;
+export type ExpenseInput = Omit<Expense, 'id' | 'wallet_address' | 'created_at'>;
+export type InvestmentInput = Omit<Investment, 'id' | 'wallet_address' | 'created_at'>;
+
+// Avatar state types
+export type AvatarStatus = 'thriving' | 'energetic' | 'stable' | 'tired' | 'stressed' | 'critical';
+
+export interface AvatarState {
+    energy: number;      // 0-100
+    morale: number;      // 0-100
+    balance: number;     // 0-100
+    overallScore: number; // 0-100
+    status: AvatarStatus;
+    statusMessage: string;
+}
+
+// Aggregated metrics for calculations
+export interface AggregatedMetrics {
+    health: {
+        avgSleep: number;
+        avgActivity: number;
+        avgHealthScore: number;
+    } | null;
+    psychology: {
+        avgMood: number;
+        avgStress: number;
+        avgMotivation: number;
+    } | null;
+    finance: {
+        totalIncome: number;
+        totalExpenses: number;
+        netCashFlow: number;
+        latestNetWorth: number;
+        investmentProfitLoss: number;
+    } | null;
+}
+
+// Alert types
+export interface Alert {
+    id: string;
+    type: 'warning' | 'info' | 'success' | 'danger';
+    title: string;
+    message: string;
+    metric: string;
+}
+
+// Wallet Auth types
+export interface WalletSession {
+    walletAddress: string;
+    displayName: string | null;
+    isConnected: boolean;
+}
+
+// Database type definition for Supabase
+export interface Database {
+    public: {
+        Tables: {
+            wallet_nonces: {
+                Row: WalletNonce;
+                Insert: Omit<WalletNonce, 'created_at' | 'updated_at'>;
+                Update: Partial<Omit<WalletNonce, 'wallet_address' | 'created_at'>>;
+            };
+            profiles: {
+                Row: Profile;
+                Insert: Omit<Profile, 'id' | 'created_at' | 'updated_at'>;
+                Update: Partial<Omit<Profile, 'id' | 'wallet_address' | 'created_at'>>;
+            };
+            health_metrics: {
+                Row: HealthMetric;
+                Insert: Omit<HealthMetric, 'id' | 'created_at'>;
+                Update: Partial<Omit<HealthMetric, 'id' | 'wallet_address' | 'created_at'>>;
+            };
+            psychology_metrics: {
+                Row: PsychologyMetric;
+                Insert: Omit<PsychologyMetric, 'id' | 'created_at'>;
+                Update: Partial<Omit<PsychologyMetric, 'id' | 'wallet_address' | 'created_at'>>;
+            };
+            net_worth: {
+                Row: NetWorth;
+                Insert: Omit<NetWorth, 'id' | 'created_at'>;
+                Update: Partial<Omit<NetWorth, 'id' | 'wallet_address' | 'created_at'>>;
+            };
+            income: {
+                Row: Income;
+                Insert: Omit<Income, 'id' | 'created_at'>;
+                Update: Partial<Omit<Income, 'id' | 'wallet_address' | 'created_at'>>;
+            };
+            expenses: {
+                Row: Expense;
+                Insert: Omit<Expense, 'id' | 'created_at'>;
+                Update: Partial<Omit<Expense, 'id' | 'wallet_address' | 'created_at'>>;
+            };
+            investments: {
+                Row: Investment;
+                Insert: Omit<Investment, 'id' | 'created_at'>;
+                Update: Partial<Omit<Investment, 'id' | 'wallet_address' | 'created_at'>>;
+            };
+        };
+    };
+}
