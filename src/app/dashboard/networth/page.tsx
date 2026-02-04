@@ -106,9 +106,9 @@ export default function NetWorthPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Net Durum</h1>
+                    <h1 className="text-2xl font-bold">Net Worth</h1>
                     <p className="text-slate-400 text-sm mt-1">
-                        Toplam varlık ve nakit durumunu takip et
+                        Track your total assets and cash position
                     </p>
                 </div>
                 <button
@@ -116,18 +116,18 @@ export default function NetWorthPage() {
                     className="btn btn-primary"
                 >
                     <Plus className="w-4 h-4" />
-                    Veri Ekle
+                    Add Entry
                 </button>
             </div>
 
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">Yeni Kayıt</h3>
+                    <h3 className="text-lg font-semibold mb-4">New Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid md:grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Tarih</label>
+                                <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
                                     type="date"
                                     value={formData.date}
@@ -136,7 +136,7 @@ export default function NetWorthPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Toplam Varlık (₺)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Total Assets ($)</label>
                                 <input
                                     type="number"
                                     step="0.01"
@@ -147,7 +147,7 @@ export default function NetWorthPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Nakit (₺)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Cash ($)</label>
                                 <input
                                     type="number"
                                     step="0.01"
@@ -159,11 +159,11 @@ export default function NetWorthPage() {
                             </div>
                         </div>
                         <div>
-                            <label className="block text-sm text-slate-400 mb-2">Notlar</label>
+                            <label className="block text-sm text-slate-400 mb-2">Notes</label>
                             <textarea
                                 value={formData.notes}
                                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                placeholder="Ek bilgiler..."
+                                placeholder="Additional information..."
                                 rows={2}
                             />
                         </div>
@@ -173,14 +173,14 @@ export default function NetWorthPage() {
                                 onClick={() => setShowForm(false)}
                                 className="btn btn-secondary"
                             >
-                                İptal
+                                Cancel
                             </button>
                             <button
                                 type="submit"
                                 disabled={saving}
                                 className="btn btn-primary"
                             >
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Kaydet'}
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
                             </button>
                         </div>
                     </form>
@@ -196,7 +196,7 @@ export default function NetWorthPage() {
                                 <Wallet className="w-6 h-6 text-sky-400" />
                             </div>
                             <div>
-                                <span className="text-slate-400 text-sm">Toplam Varlık</span>
+                                <span className="text-slate-400 text-sm">Total Assets</span>
                                 {assetChange !== 0 && (
                                     <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${assetChange >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
                                         }`}>
@@ -215,7 +215,7 @@ export default function NetWorthPage() {
                             <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
                                 <Banknote className="w-6 h-6 text-emerald-400" />
                             </div>
-                            <span className="text-slate-400 text-sm">Nakit</span>
+                            <span className="text-slate-400 text-sm">Cash</span>
                         </div>
                         <p className="text-4xl font-bold">
                             {formatCurrency(metrics[0]?.cash ? Number(metrics[0].cash) : 0)}
@@ -227,12 +227,12 @@ export default function NetWorthPage() {
             {/* Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Varlık Trendi</h3>
+                    <h3 className="text-lg font-semibold mb-4">Asset Trend</h3>
                     <TimeSeriesChart
                         data={chartData}
                         lines={[
-                            { dataKey: 'assets', name: 'Toplam Varlık', color: '#38bdf8' },
-                            { dataKey: 'cash', name: 'Nakit', color: '#10b981' },
+                            { dataKey: 'assets', name: 'Total Assets', color: '#38bdf8' },
+                            { dataKey: 'cash', name: 'Cash', color: '#10b981' },
                         ]}
                         height={300}
                     />
@@ -241,20 +241,20 @@ export default function NetWorthPage() {
 
             {/* Data Table */}
             <div className="glass-dark rounded-2xl p-6">
-                <h3 className="text-lg font-semibold mb-4">Son Kayıtlar</h3>
+                <h3 className="text-lg font-semibold mb-4">Recent Entries</h3>
                 {metrics.length === 0 ? (
                     <p className="text-slate-500 text-center py-8">
-                        Henüz veri yok. Yukarıdaki butona tıklayarak veri ekleyin.
+                        No data yet. Click the button above to add entries.
                     </p>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-700/50">
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tarih</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Toplam Varlık</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Nakit</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Notlar</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Total Assets</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Cash</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Notes</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
                             </thead>

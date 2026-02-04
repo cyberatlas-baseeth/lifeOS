@@ -114,9 +114,9 @@ export default function PsychologyPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Psikoloji Metrikleri</h1>
+                    <h1 className="text-2xl font-bold">Psychology Metrics</h1>
                     <p className="text-slate-400 text-sm mt-1">
-                        Ruh hali, stres ve motivasyon seviyelerini takip et
+                        Track your mood, stress, and motivation levels
                     </p>
                 </div>
                 <button
@@ -124,18 +124,18 @@ export default function PsychologyPage() {
                     className="btn btn-primary"
                 >
                     <Plus className="w-4 h-4" />
-                    Veri Ekle
+                    Add Entry
                 </button>
             </div>
 
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">Yeni Kayıt</h3>
+                    <h3 className="text-lg font-semibold mb-4">New Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Tarih</label>
+                                <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
                                     type="date"
                                     value={formData.date}
@@ -144,7 +144,7 @@ export default function PsychologyPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Ruh Hali (1-10)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Mood (1-10)</label>
                                 <input
                                     type="number"
                                     min="1"
@@ -155,7 +155,7 @@ export default function PsychologyPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Stres (1-10)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Stress (1-10)</label>
                                 <input
                                     type="number"
                                     min="1"
@@ -166,7 +166,7 @@ export default function PsychologyPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Motivasyon (1-10)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Motivation (1-10)</label>
                                 <input
                                     type="number"
                                     min="1"
@@ -178,11 +178,11 @@ export default function PsychologyPage() {
                             </div>
                         </div>
                         <div>
-                            <label className="block text-sm text-slate-400 mb-2">Notlar</label>
+                            <label className="block text-sm text-slate-400 mb-2">Notes</label>
                             <textarea
                                 value={formData.notes}
                                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                placeholder="Bugün zihinsel olarak nasıl hissediyorsun?"
+                                placeholder="How are you feeling mentally today?"
                                 rows={2}
                             />
                         </div>
@@ -192,14 +192,14 @@ export default function PsychologyPage() {
                                 onClick={() => setShowForm(false)}
                                 className="btn btn-secondary"
                             >
-                                İptal
+                                Cancel
                             </button>
                             <button
                                 type="submit"
                                 disabled={saving}
                                 className="btn btn-primary"
                             >
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Kaydet'}
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
                             </button>
                         </div>
                     </form>
@@ -214,7 +214,7 @@ export default function PsychologyPage() {
                             <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
                                 <Smile className="w-5 h-5 text-amber-400" />
                             </div>
-                            <span className="text-slate-400">Ortalama Ruh Hali</span>
+                            <span className="text-slate-400">Average Mood</span>
                         </div>
                         <div className="flex items-center gap-3">
                             <p className="text-3xl font-bold">
@@ -231,7 +231,7 @@ export default function PsychologyPage() {
                             <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
                                 <Frown className="w-5 h-5 text-red-400" />
                             </div>
-                            <span className="text-slate-400">Ortalama Stres</span>
+                            <span className="text-slate-400">Average Stress</span>
                         </div>
                         <p className="text-3xl font-bold">
                             {(metrics.reduce((sum, m) => sum + Number(m.stress || 0), 0) / metrics.filter(m => m.stress).length || 0).toFixed(1)}
@@ -244,7 +244,7 @@ export default function PsychologyPage() {
                             <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
                                 <Zap className="w-5 h-5 text-emerald-400" />
                             </div>
-                            <span className="text-slate-400">Ortalama Motivasyon</span>
+                            <span className="text-slate-400">Average Motivation</span>
                         </div>
                         <p className="text-3xl font-bold">
                             {(metrics.reduce((sum, m) => sum + Number(m.motivation || 0), 0) / metrics.filter(m => m.motivation).length || 0).toFixed(1)}
@@ -257,13 +257,13 @@ export default function PsychologyPage() {
             {/* Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Trend Grafiği</h3>
+                    <h3 className="text-lg font-semibold mb-4">Trend Chart</h3>
                     <TimeSeriesChart
                         data={chartData}
                         lines={[
-                            { dataKey: 'mood', name: 'Ruh Hali', color: '#fbbf24' },
-                            { dataKey: 'stress', name: 'Stres', color: '#f87171' },
-                            { dataKey: 'motivation', name: 'Motivasyon', color: '#10b981' },
+                            { dataKey: 'mood', name: 'Mood', color: '#fbbf24' },
+                            { dataKey: 'stress', name: 'Stress', color: '#f87171' },
+                            { dataKey: 'motivation', name: 'Motivation', color: '#10b981' },
                         ]}
                         height={300}
                     />
@@ -272,21 +272,21 @@ export default function PsychologyPage() {
 
             {/* Data Table */}
             <div className="glass-dark rounded-2xl p-6">
-                <h3 className="text-lg font-semibold mb-4">Son Kayıtlar</h3>
+                <h3 className="text-lg font-semibold mb-4">Recent Entries</h3>
                 {metrics.length === 0 ? (
                     <p className="text-slate-500 text-center py-8">
-                        Henüz veri yok. Yukarıdaki butona tıklayarak veri ekleyin.
+                        No data yet. Click the button above to add an entry.
                     </p>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-700/50">
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tarih</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Ruh Hali</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Stres</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Motivasyon</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Notlar</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Mood</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Stress</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Motivation</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Notes</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
                             </thead>

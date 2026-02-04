@@ -117,9 +117,9 @@ export default function IncomePage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Gelir</h1>
+                    <h1 className="text-2xl font-bold">Income</h1>
                     <p className="text-slate-400 text-sm mt-1">
-                        Düzenli ve ek gelirlerini kaydet
+                        Track your regular and additional income
                     </p>
                 </div>
                 <button
@@ -127,18 +127,18 @@ export default function IncomePage() {
                     className="btn btn-primary"
                 >
                     <Plus className="w-4 h-4" />
-                    Gelir Ekle
+                    Add Income
                 </button>
             </div>
 
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">Yeni Gelir Kaydı</h3>
+                    <h3 className="text-lg font-semibold mb-4">New Income Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Tarih</label>
+                                <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
                                     type="date"
                                     value={formData.date}
@@ -147,18 +147,18 @@ export default function IncomePage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Kategori</label>
+                                <label className="block text-sm text-slate-400 mb-2">Category</label>
                                 <select
                                     value={formData.category}
                                     onChange={(e) => setFormData({ ...formData, category: e.target.value as 'regular' | 'additional' })}
                                     required
                                 >
-                                    <option value="regular">Düzenli Gelir</option>
-                                    <option value="additional">Ek Gelir</option>
+                                    <option value="regular">Regular Income</option>
+                                    <option value="additional">Additional Income</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Tutar (₺)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Amount ($)</label>
                                 <input
                                     type="number"
                                     step="0.01"
@@ -170,12 +170,12 @@ export default function IncomePage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Açıklama</label>
+                                <label className="block text-sm text-slate-400 mb-2">Description</label>
                                 <input
                                     type="text"
                                     value={formData.description}
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    placeholder="Maaş, freelance vb."
+                                    placeholder="Salary, freelance, etc."
                                 />
                             </div>
                         </div>
@@ -185,14 +185,14 @@ export default function IncomePage() {
                                 onClick={() => setShowForm(false)}
                                 className="btn btn-secondary"
                             >
-                                İptal
+                                Cancel
                             </button>
                             <button
                                 type="submit"
                                 disabled={saving}
                                 className="btn btn-primary"
                             >
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Kaydet'}
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
                             </button>
                         </div>
                     </form>
@@ -206,7 +206,7 @@ export default function IncomePage() {
                         <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
                             <TrendingUp className="w-6 h-6 text-emerald-400" />
                         </div>
-                        <span className="text-slate-400 text-sm">Toplam Gelir</span>
+                        <span className="text-slate-400 text-sm">Total Income</span>
                     </div>
                     <p className="text-4xl font-bold text-emerald-400">
                         {formatCurrency(totalRegular + totalAdditional)}
@@ -218,7 +218,7 @@ export default function IncomePage() {
                         <div className="w-12 h-12 rounded-xl bg-sky-500/20 flex items-center justify-center">
                             <Briefcase className="w-6 h-6 text-sky-400" />
                         </div>
-                        <span className="text-slate-400 text-sm">Düzenli Gelir</span>
+                        <span className="text-slate-400 text-sm">Regular Income</span>
                     </div>
                     <p className="text-3xl font-bold">
                         {formatCurrency(totalRegular)}
@@ -230,7 +230,7 @@ export default function IncomePage() {
                         <div className="w-12 h-12 rounded-xl bg-violet-500/20 flex items-center justify-center">
                             <Gift className="w-6 h-6 text-violet-400" />
                         </div>
-                        <span className="text-slate-400 text-sm">Ek Gelir</span>
+                        <span className="text-slate-400 text-sm">Additional Income</span>
                     </div>
                     <p className="text-3xl font-bold">
                         {formatCurrency(totalAdditional)}
@@ -241,13 +241,13 @@ export default function IncomePage() {
             {/* Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Gelir Trendi</h3>
+                    <h3 className="text-lg font-semibold mb-4">Income Trend</h3>
                     <TimeSeriesChart
                         data={chartData}
                         type="bar"
                         bars={[
-                            { dataKey: 'regular', name: 'Düzenli', color: '#38bdf8' },
-                            { dataKey: 'additional', name: 'Ek', color: '#8b5cf6' },
+                            { dataKey: 'regular', name: 'Regular', color: '#38bdf8' },
+                            { dataKey: 'additional', name: 'Additional', color: '#8b5cf6' },
                         ]}
                         height={300}
                     />
@@ -256,20 +256,20 @@ export default function IncomePage() {
 
             {/* Data Table */}
             <div className="glass-dark rounded-2xl p-6">
-                <h3 className="text-lg font-semibold mb-4">Son Kayıtlar</h3>
+                <h3 className="text-lg font-semibold mb-4">Recent Entries</h3>
                 {records.length === 0 ? (
                     <p className="text-slate-500 text-center py-8">
-                        Henüz gelir kaydı yok. Yukarıdaki butona tıklayarak ekleyin.
+                        No income records yet. Click the button above to add one.
                     </p>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-700/50">
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tarih</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Kategori</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tutar</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Açıklama</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Category</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Amount</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Description</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
                             </thead>
@@ -284,7 +284,7 @@ export default function IncomePage() {
                                                     ? 'bg-sky-500/20 text-sky-400'
                                                     : 'bg-violet-500/20 text-violet-400'}
                       `}>
-                                                {record.category === 'regular' ? 'Düzenli' : 'Ek'}
+                                                {record.category === 'regular' ? 'Regular' : 'Additional'}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 text-sm font-medium text-emerald-400">

@@ -9,14 +9,14 @@ import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import { Plus, Trash2, PiggyBank, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 
 const INVESTMENT_TYPES = [
-    'Borsa',
-    'Kripto',
-    'Altın',
-    'Döviz',
-    'Gayrimenkul',
-    'Fon',
-    'Tahvil',
-    'Diğer',
+    'Stocks',
+    'Crypto',
+    'Gold',
+    'Forex',
+    'Real Estate',
+    'Funds',
+    'Bonds',
+    'Other',
 ];
 
 export default function InvestmentsPage() {
@@ -28,7 +28,7 @@ export default function InvestmentsPage() {
 
     const [formData, setFormData] = useState({
         date: formatDateForInput(),
-        investment_type: 'Borsa',
+        investment_type: 'Stocks',
         amount: '',
         profit_loss: '',
         notes: '',
@@ -74,7 +74,7 @@ export default function InvestmentsPage() {
         if (!error) {
             setFormData({
                 date: formatDateForInput(),
-                investment_type: 'Borsa',
+                investment_type: 'Stocks',
                 amount: '',
                 profit_loss: '',
                 notes: '',
@@ -138,9 +138,9 @@ export default function InvestmentsPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Yatırımlar</h1>
+                    <h1 className="text-2xl font-bold">Investments</h1>
                     <p className="text-slate-400 text-sm mt-1">
-                        Yatırım portföyünü ve kar/zarar durumunu takip et
+                        Track your investment portfolio and profit/loss status
                     </p>
                 </div>
                 <button
@@ -148,18 +148,18 @@ export default function InvestmentsPage() {
                     className="btn btn-primary"
                 >
                     <Plus className="w-4 h-4" />
-                    Yatırım Ekle
+                    Add Investment
                 </button>
             </div>
 
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">Yeni Yatırım Kaydı</h3>
+                    <h3 className="text-lg font-semibold mb-4">New Investment Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Tarih</label>
+                                <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
                                     type="date"
                                     value={formData.date}
@@ -168,7 +168,7 @@ export default function InvestmentsPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Tür</label>
+                                <label className="block text-sm text-slate-400 mb-2">Type</label>
                                 <select
                                     value={formData.investment_type}
                                     onChange={(e) => setFormData({ ...formData, investment_type: e.target.value })}
@@ -180,7 +180,7 @@ export default function InvestmentsPage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Tutar (₺)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Amount ($)</label>
                                 <input
                                     type="number"
                                     step="0.01"
@@ -191,22 +191,22 @@ export default function InvestmentsPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Kâr/Zarar (₺)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Profit/Loss ($)</label>
                                 <input
                                     type="number"
                                     step="0.01"
                                     value={formData.profit_loss}
                                     onChange={(e) => setFormData({ ...formData, profit_loss: e.target.value })}
-                                    placeholder="500 veya -200"
+                                    placeholder="500 or -200"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Notlar</label>
+                                <label className="block text-sm text-slate-400 mb-2">Notes</label>
                                 <input
                                     type="text"
                                     value={formData.notes}
                                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    placeholder="Ek bilgi..."
+                                    placeholder="Additional info..."
                                 />
                             </div>
                         </div>
@@ -216,14 +216,14 @@ export default function InvestmentsPage() {
                                 onClick={() => setShowForm(false)}
                                 className="btn btn-secondary"
                             >
-                                İptal
+                                Cancel
                             </button>
                             <button
                                 type="submit"
                                 disabled={saving}
                                 className="btn btn-primary"
                             >
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Kaydet'}
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
                             </button>
                         </div>
                     </form>
@@ -237,7 +237,7 @@ export default function InvestmentsPage() {
                         <div className="w-12 h-12 rounded-xl bg-accent-500/20 flex items-center justify-center">
                             <PiggyBank className="w-6 h-6 text-accent-400" />
                         </div>
-                        <span className="text-slate-400 text-sm">Toplam Yatırım</span>
+                        <span className="text-slate-400 text-sm">Total Investment</span>
                     </div>
                     <p className="text-4xl font-bold">
                         {formatCurrency(totalInvested)}
@@ -252,7 +252,7 @@ export default function InvestmentsPage() {
                                 : <TrendingDown className="w-6 h-6 text-red-400" />
                             }
                         </div>
-                        <span className="text-slate-400 text-sm">Toplam Kâr/Zarar</span>
+                        <span className="text-slate-400 text-sm">Total Profit/Loss</span>
                     </div>
                     <p className={`text-4xl font-bold ${totalProfitLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {totalProfitLoss >= 0 ? '+' : ''}{formatCurrency(totalProfitLoss)}
@@ -264,7 +264,7 @@ export default function InvestmentsPage() {
                         <div className="w-12 h-12 rounded-xl bg-sky-500/20 flex items-center justify-center">
                             <span className="text-sky-400 text-lg font-bold">%</span>
                         </div>
-                        <span className="text-slate-400 text-sm">Getiri Oranı</span>
+                        <span className="text-slate-400 text-sm">Return Rate</span>
                     </div>
                     <p className={`text-4xl font-bold ${totalProfitLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {totalInvested > 0
@@ -278,7 +278,7 @@ export default function InvestmentsPage() {
             {/* Portfolio Distribution */}
             {Object.keys(byType).length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Portföy Dağılımı</h3>
+                    <h3 className="text-lg font-semibold mb-4">Portfolio Distribution</h3>
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {Object.entries(byType).map(([type, data]) => (
                             <div key={type} className="glass rounded-xl p-4">
@@ -304,11 +304,11 @@ export default function InvestmentsPage() {
             {/* Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Kâr/Zarar Trendi</h3>
+                    <h3 className="text-lg font-semibold mb-4">Profit/Loss Trend</h3>
                     <TimeSeriesChart
                         data={chartData}
                         lines={[
-                            { dataKey: 'profitLoss', name: 'Kâr/Zarar', color: totalProfitLoss >= 0 ? '#10b981' : '#ef4444' },
+                            { dataKey: 'profitLoss', name: 'Profit/Loss', color: totalProfitLoss >= 0 ? '#10b981' : '#ef4444' },
                         ]}
                         height={300}
                         showLegend={false}
@@ -318,21 +318,21 @@ export default function InvestmentsPage() {
 
             {/* Data Table */}
             <div className="glass-dark rounded-2xl p-6">
-                <h3 className="text-lg font-semibold mb-4">Son Kayıtlar</h3>
+                <h3 className="text-lg font-semibold mb-4">Recent Entries</h3>
                 {records.length === 0 ? (
                     <p className="text-slate-500 text-center py-8">
-                        Henüz yatırım kaydı yok. Yukarıdaki butona tıklayarak ekleyin.
+                        No investment records yet. Click the button above to add one.
                     </p>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-700/50">
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tarih</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tür</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tutar</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Kâr/Zarar</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Notlar</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Type</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Amount</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Profit/Loss</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Notes</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
                             </thead>

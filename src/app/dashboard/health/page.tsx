@@ -26,7 +26,7 @@ interface FormData {
     processed_food_level: ProcessedFoodLevel | '';
     water_intake: WaterIntake | '';
     illness_status: IllnessStatus | '';
-    notes: string;
+
 }
 
 const initialFormData: FormData = {
@@ -37,7 +37,7 @@ const initialFormData: FormData = {
     processed_food_level: '',
     water_intake: '',
     illness_status: '',
-    notes: '',
+
 };
 
 export default function HealthPage() {
@@ -104,7 +104,6 @@ export default function HealthPage() {
             processed_food_level: formData.processed_food_level || null,
             water_intake: formData.water_intake || null,
             illness_status: formData.illness_status || null,
-            notes: formData.notes || null,
         }, {
             onConflict: 'wallet_address,date',
         });
@@ -363,16 +362,7 @@ export default function HealthPage() {
                             </div>
                         </div>
 
-                        {/* Notes */}
-                        <div>
-                            <label className="block text-sm text-slate-400 mb-2">Notes</label>
-                            <textarea
-                                value={formData.notes}
-                                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                placeholder="How are you feeling today?"
-                                rows={2}
-                            />
-                        </div>
+
 
                         {/* Actions */}
                         <div className="flex justify-end gap-3">

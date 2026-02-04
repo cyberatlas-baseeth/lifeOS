@@ -117,9 +117,9 @@ export default function ExpensesPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Giderler</h1>
+                    <h1 className="text-2xl font-bold">Expenses</h1>
                     <p className="text-slate-400 text-sm mt-1">
-                        Sabit ve değişken giderlerini takip et
+                        Track your fixed and variable expenses
                     </p>
                 </div>
                 <button
@@ -127,18 +127,18 @@ export default function ExpensesPage() {
                     className="btn btn-primary"
                 >
                     <Plus className="w-4 h-4" />
-                    Gider Ekle
+                    Add Expense
                 </button>
             </div>
 
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">Yeni Gider Kaydı</h3>
+                    <h3 className="text-lg font-semibold mb-4">New Expense Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Tarih</label>
+                                <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
                                     type="date"
                                     value={formData.date}
@@ -147,18 +147,18 @@ export default function ExpensesPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Kategori</label>
+                                <label className="block text-sm text-slate-400 mb-2">Category</label>
                                 <select
                                     value={formData.category}
                                     onChange={(e) => setFormData({ ...formData, category: e.target.value as 'fixed' | 'variable' })}
                                     required
                                 >
-                                    <option value="fixed">Sabit Gider</option>
-                                    <option value="variable">Değişken Gider</option>
+                                    <option value="fixed">Fixed Expense</option>
+                                    <option value="variable">Variable Expense</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Tutar (₺)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Amount ($)</label>
                                 <input
                                     type="number"
                                     step="0.01"
@@ -170,12 +170,12 @@ export default function ExpensesPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Açıklama</label>
+                                <label className="block text-sm text-slate-400 mb-2">Description</label>
                                 <input
                                     type="text"
                                     value={formData.description}
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    placeholder="Kira, fatura, market vb."
+                                    placeholder="Rent, bills, groceries, etc."
                                 />
                             </div>
                         </div>
@@ -185,14 +185,14 @@ export default function ExpensesPage() {
                                 onClick={() => setShowForm(false)}
                                 className="btn btn-secondary"
                             >
-                                İptal
+                                Cancel
                             </button>
                             <button
                                 type="submit"
                                 disabled={saving}
                                 className="btn btn-primary"
                             >
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Kaydet'}
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
                             </button>
                         </div>
                     </form>
@@ -206,7 +206,7 @@ export default function ExpensesPage() {
                         <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center">
                             <TrendingDown className="w-6 h-6 text-red-400" />
                         </div>
-                        <span className="text-slate-400 text-sm">Toplam Gider</span>
+                        <span className="text-slate-400 text-sm">Total Expenses</span>
                     </div>
                     <p className="text-4xl font-bold text-red-400">
                         {formatCurrency(totalFixed + totalVariable)}
@@ -218,7 +218,7 @@ export default function ExpensesPage() {
                         <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
                             <Home className="w-6 h-6 text-amber-400" />
                         </div>
-                        <span className="text-slate-400 text-sm">Sabit Giderler</span>
+                        <span className="text-slate-400 text-sm">Fixed Expenses</span>
                     </div>
                     <p className="text-3xl font-bold">
                         {formatCurrency(totalFixed)}
@@ -230,7 +230,7 @@ export default function ExpensesPage() {
                         <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
                             <ShoppingCart className="w-6 h-6 text-orange-400" />
                         </div>
-                        <span className="text-slate-400 text-sm">Değişken Giderler</span>
+                        <span className="text-slate-400 text-sm">Variable Expenses</span>
                     </div>
                     <p className="text-3xl font-bold">
                         {formatCurrency(totalVariable)}
@@ -241,13 +241,13 @@ export default function ExpensesPage() {
             {/* Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Gider Trendi</h3>
+                    <h3 className="text-lg font-semibold mb-4">Expense Trend</h3>
                     <TimeSeriesChart
                         data={chartData}
                         type="bar"
                         bars={[
-                            { dataKey: 'fixed', name: 'Sabit', color: '#fbbf24' },
-                            { dataKey: 'variable', name: 'Değişken', color: '#fb923c' },
+                            { dataKey: 'fixed', name: 'Fixed', color: '#fbbf24' },
+                            { dataKey: 'variable', name: 'Variable', color: '#fb923c' },
                         ]}
                         height={300}
                     />
@@ -256,20 +256,20 @@ export default function ExpensesPage() {
 
             {/* Data Table */}
             <div className="glass-dark rounded-2xl p-6">
-                <h3 className="text-lg font-semibold mb-4">Son Kayıtlar</h3>
+                <h3 className="text-lg font-semibold mb-4">Recent Entries</h3>
                 {records.length === 0 ? (
                     <p className="text-slate-500 text-center py-8">
-                        Henüz gider kaydı yok. Yukarıdaki butona tıklayarak ekleyin.
+                        No expense records yet. Click the button above to add one.
                     </p>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-700/50">
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tarih</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Kategori</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tutar</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Açıklama</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Category</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Amount</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Description</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
                             </thead>
@@ -284,7 +284,7 @@ export default function ExpensesPage() {
                                                     ? 'bg-amber-500/20 text-amber-400'
                                                     : 'bg-orange-500/20 text-orange-400'}
                       `}>
-                                                {record.category === 'fixed' ? 'Sabit' : 'Değişken'}
+                                                {record.category === 'fixed' ? 'Fixed' : 'Variable'}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 text-sm font-medium text-red-400">
