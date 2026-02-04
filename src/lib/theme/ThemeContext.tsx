@@ -10,7 +10,13 @@ interface ThemeContextType {
     setTheme: (theme: Theme) => void;
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const defaultContext: ThemeContextType = {
+    theme: 'light',
+    toggleTheme: () => { },
+    setTheme: () => { },
+};
+
+const ThemeContext = createContext<ThemeContextType>(defaultContext);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
     const [theme, setThemeState] = useState<Theme>('light');
@@ -39,22 +45,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setTheme(theme === 'light' ? 'dark' : 'light');
     };
 
-    // Prevent hydration mismatch by not rendering until mounted
-    if (!mounted) {
-        return <>{children}</>;
-    }
+    // Always provide the context, but use default values if not mounted
+    const value = mounted
+        ? { theme, toggleTheme, setTheme }
+        : defaultContext;
 
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+        <ThemeContext.Provider value={value}>
             {children}
         </ThemeContext.Provider>
     );
 }
 
 export function useTheme() {
-    const context = useContext(ThemeContext);
-    if (context === undefined) {
-        throw new Error('useTheme must be used within a ThemeProvider');
-    }
-    return context;
+    return useContext(ThemeContext);
 }
