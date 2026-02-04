@@ -49,6 +49,26 @@ export default function HealthPage() {
     const [showTooltip, setShowTooltip] = useState(false);
     const [formData, setFormData] = useState<FormData>(initialFormData);
 
+    // Get last 3 days of activity data (including today's input if provided)
+    const getLast3DaysActivity = useMemo(() => {
+        // Get the date we're editing
+        const currentDate = formData.date;
+
+        // Filter metrics for dates before the current date being edited
+        const previousMetrics = metrics
+            .filter(m => m.date < currentDate && m.activity_level)
+            .slice(0, 2) // Get up to 2 previous days (most recent first)
+            .reverse(); // Oldest to newest
+
+        // Build the activity array (oldest to newest, including today)
+        const activityLevels = previousMetrics.map(m => m.activity_level as number);
+        if (formData.activity_level) {
+            activityLevels.push(formData.activity_level);
+        }
+
+        return activityLevels;
+    }, [metrics, formData.date, formData.activity_level]);
+
     // Calculate health score in real-time
     const scoreInput: HealthScoreInput = useMemo(() => ({
         sleepHours: formData.sleep_hours || null,
@@ -57,7 +77,8 @@ export default function HealthPage() {
         waterIntake: formData.water_intake || null,
         processedFoodLevel: formData.processed_food_level || null,
         illnessStatus: formData.illness_status || null,
-    }), [formData]);
+        last3DaysActivity: getLast3DaysActivity,
+    }), [formData, getLast3DaysActivity]);
 
     const scoreBreakdown = useMemo(() => getHealthScoreBreakdown(scoreInput), [scoreInput]);
     const calculatedScore = scoreBreakdown.finalScore;
@@ -352,6 +373,18 @@ export default function HealthPage() {
                                                 <span className="text-slate-400">Illness Penalty</span>
                                                 <span className="text-red-400">-{scoreBreakdown.illnessPenalty}</span>
                                             </div>
+                                            {scoreBreakdown.overtrainingPenalty > 0 && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-orange-400">Overtraining Penalty</span>
+                                                    <span className="text-orange-400">-{scoreBreakdown.overtrainingPenalty}</span>
+                                                </div>
+                                            )}
+                                            {scoreBreakdown.activeRecoveryBonus > 0 && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-emerald-400">Active Recovery Bonus</span>
+                                                    <span className="text-emerald-400">+{scoreBreakdown.activeRecoveryBonus}</span>
+                                                </div>
+                                            )}
                                             <div className="border-t border-slate-700 pt-2 mt-2 flex justify-between font-semibold">
                                                 <span>Total</span>
                                                 <span className="text-emerald-400">{scoreBreakdown.finalScore}</span>
@@ -362,7 +395,31 @@ export default function HealthPage() {
                             </div>
                         </div>
 
+                        {/* Overtraining Warning Message */}
+                        {scoreBreakdown.overtrainingPenalty > 0 && (
+                            <div className="flex items-start gap-3 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
+                                <ActivityIcon className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-sm text-orange-300 font-medium">Intense activity for 3 days in a row</p>
+                                    <p className="text-xs text-orange-400/70 mt-1">
+                                        Recovery days are important for progress. Consider a lighter activity day to help your body recover.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
+                        {/* Active Recovery Bonus Message */}
+                        {scoreBreakdown.activeRecoveryBonus > 0 && (
+                            <div className="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                                <Heart className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-sm text-emerald-300 font-medium">Great recovery choice!</p>
+                                    <p className="text-xs text-emerald-400/70 mt-1">
+                                        Taking a lighter activity day after intense days helps your body recover and makes you stronger.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Actions */}
                         <div className="flex justify-end gap-3">
