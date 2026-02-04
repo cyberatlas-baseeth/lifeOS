@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
 import { WalletProvider } from "@/lib/wallet/WalletContext";
+import { ThemeProvider } from "@/lib/theme/ThemeContext";
 import "./globals.css";
 
 export const metadata: Metadata = {
-    title: "LifeOS - Dijital Avatar",
-    description: "Hayatınızı takip eden, analiz eden ve size özel bir dijital avatar üreten kişisel yaşam işletim sistemi.",
+    title: "LifeOS - Digital Avatar",
+    description: "A personal life operating system that tracks, analyzes, and generates a unique digital avatar for you.",
     keywords: ["life tracking", "personal dashboard", "health", "finance", "digital avatar", "web3"],
     authors: [{ name: "LifeOS Team" }],
     openGraph: {
-        title: "LifeOS - Dijital Avatar",
-        description: "Kişisel yaşam işletim sisteminiz",
+        title: "LifeOS - Digital Avatar",
+        description: "Your personal life operating system",
         type: "website",
     },
 };
@@ -20,11 +21,13 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="tr">
+        <html lang="en" suppressHydrationWarning>
             <body className="antialiased">
-                <WalletProvider>
-                    {children}
-                </WalletProvider>
+                <ThemeProvider>
+                    <WalletProvider>
+                        {children}
+                    </WalletProvider>
+                </ThemeProvider>
             </body>
         </html>
     );
