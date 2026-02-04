@@ -16,7 +16,7 @@ import {
     calculateActivityScore
 } from '@/lib/healthScore';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
-import { Plus, Trash2, Moon, Activity as ActivityIcon, Heart, Loader2, Info, X } from 'lucide-react';
+import { Plus, Trash2, Moon, Activity as ActivityIcon, Heart, Loader2, Info, X, Pencil } from 'lucide-react';
 
 interface FormData {
     date: string;
@@ -141,6 +141,19 @@ export default function HealthPage() {
         const supabase = createClient();
         await supabase.from('health_metrics').delete().eq('id', id);
         fetchMetrics();
+    };
+
+    const handleEdit = (metric: HealthMetric) => {
+        setFormData({
+            date: metric.date,
+            sleep_hours: metric.sleep_hours as SleepDuration || '',
+            activity_level: metric.activity_level as ActivityLevel || '',
+            meal_quality: metric.meal_quality || '',
+            processed_food_level: metric.processed_food_level || '',
+            water_intake: metric.water_intake || '',
+            illness_status: metric.illness_status || '',
+        });
+        setShowForm(true);
     };
 
     const chartData = metrics
@@ -579,12 +592,22 @@ export default function HealthPage() {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <button
-                                                onClick={() => handleDelete(metric.id)}
-                                                className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <div className="flex gap-1">
+                                                <button
+                                                    onClick={() => handleEdit(metric)}
+                                                    className="p-2 rounded-lg hover:bg-primary-500/20 text-slate-500 hover:text-primary-400 transition-colors"
+                                                    title="Edit"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(metric.id)}
+                                                    className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
