@@ -23,6 +23,11 @@ export type WaterIntake = 'low' | 'adequate' | 'good';
 export type IllnessStatus = 'none' | 'mild' | 'severe';
 export type ActivityLevel = 1 | 2 | 3 | 4 | 5;
 
+// Psychology types (English only)
+export type StressLevel = 'calm' | 'mild' | 'high';
+export type MotivationLevel = 'high' | 'medium' | 'low';
+export type FatigueLevel = 'fresh' | 'tired' | 'exhausted';
+
 export interface HealthMetric {
     id: string;
     wallet_address: string;
@@ -42,11 +47,17 @@ export interface PsychologyMetric {
     id: string;
     wallet_address: string;
     date: string;
+    // New dropdown-based fields
+    stress_level: StressLevel | null;
+    motivation_level: MotivationLevel | null;
+    mental_fatigue: FatigueLevel | null;
+    mental_score: number | null;
+    notes: string | null;
+    created_at: string;
+    // Legacy fields (for backwards compatibility)
     mood: number | null;
     stress: number | null;
     motivation: number | null;
-    notes: string | null;
-    created_at: string;
 }
 
 export interface NetWorth {
@@ -121,6 +132,7 @@ export interface AggregatedMetrics {
         avgMood: number;
         avgStress: number;
         avgMotivation: number;
+        avgMentalScore: number;
     } | null;
     finance: {
         totalIncome: number;

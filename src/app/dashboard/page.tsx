@@ -114,19 +114,14 @@ export default function DashboardPage() {
         }
 
         if (psychData && psychData.length > 0) {
-            const validMood = psychData.filter(p => p.mood !== null);
-            const validStress = psychData.filter(p => p.stress !== null);
-            const validMotivation = psychData.filter(p => p.motivation !== null);
+            const validMentalScore = psychData.filter(p => p.mental_score !== null);
 
             newMetrics.psychology = {
-                avgMood: validMood.length > 0
-                    ? validMood.reduce((sum, p) => sum + Number(p.mood), 0) / validMood.length
-                    : 0,
-                avgStress: validStress.length > 0
-                    ? validStress.reduce((sum, p) => sum + Number(p.stress), 0) / validStress.length
-                    : 0,
-                avgMotivation: validMotivation.length > 0
-                    ? validMotivation.reduce((sum, p) => sum + Number(p.motivation), 0) / validMotivation.length
+                avgMood: 0, // Legacy, kept for avatar compatibility
+                avgStress: 0, // Legacy
+                avgMotivation: 0, // Legacy
+                avgMentalScore: validMentalScore.length > 0
+                    ? validMentalScore.reduce((sum, p) => sum + Number(p.mental_score), 0) / validMentalScore.length
                     : 0,
             };
         }
@@ -235,9 +230,9 @@ export default function DashboardPage() {
                 />
 
                 <MetricCard
-                    title="Mood"
-                    value={metrics.psychology?.avgMood.toFixed(1) || '-'}
-                    subtitle="Out of 10"
+                    title="Mental Score"
+                    value={metrics.psychology?.avgMentalScore ? metrics.psychology.avgMentalScore.toFixed(0) : '-'}
+                    subtitle="Psychological balance"
                     icon={Brain}
                     color="violet"
                     href="/dashboard/psychology"
