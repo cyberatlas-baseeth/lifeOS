@@ -6,6 +6,7 @@ import { useWallet } from '@/lib/wallet/WalletContext';
 import { AvatarState, AggregatedMetrics, Alert } from '@/types/database';
 import { calculateAvatarState, generateAlerts } from '@/lib/avatar/calculator';
 import { formatCurrency, getScoreColor, calculateHealthScore } from '@/lib/utils';
+import { formatTRY } from '@/lib/currency';
 import AvatarDisplay from '@/components/avatar/AvatarDisplay';
 import MetricCard from '@/components/ui/MetricCard';
 import AlertBanner from '@/components/ui/AlertBanner';
@@ -126,8 +127,8 @@ export default function DashboardPage() {
             };
         }
 
-        const totalIncome = incomeData?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
-        const totalExpenses = expenseData?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
+        const totalIncome = incomeData?.reduce((sum, i) => sum + Number(i.amount_try || i.amount || 0), 0) || 0;
+        const totalExpenses = expenseData?.reduce((sum, e) => sum + Number(e.amount_try || e.amount || 0), 0) || 0;
         const latestNetWorth = netWorthData?.[0]?.total_assets ? Number(netWorthData[0].total_assets) : 0;
         const investmentProfitLoss = investmentData?.reduce((sum, inv) => sum + Number(inv.profit_loss || 0), 0) || 0;
 
@@ -249,7 +250,7 @@ export default function DashboardPage() {
 
                 <MetricCard
                     title="Income"
-                    value={metrics.finance?.totalIncome ? formatCurrency(metrics.finance.totalIncome) : '-'}
+                    value={metrics.finance?.totalIncome ? formatTRY(metrics.finance.totalIncome) : '-'}
                     subtitle="Last 30 days"
                     icon={TrendingUp}
                     color="green"
@@ -258,7 +259,7 @@ export default function DashboardPage() {
 
                 <MetricCard
                     title="Expenses"
-                    value={metrics.finance?.totalExpenses ? formatCurrency(metrics.finance.totalExpenses) : '-'}
+                    value={metrics.finance?.totalExpenses ? formatTRY(metrics.finance.totalExpenses) : '-'}
                     subtitle="Last 30 days"
                     icon={TrendingDown}
                     color="amber"

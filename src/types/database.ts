@@ -74,9 +74,15 @@ export interface Income {
     wallet_address: string;
     date: string;
     category: 'regular' | 'additional';
-    amount: number;
+    // Currency fields
+    amount_try: number;              // Primary value (TRY)
+    amount_usd: number;              // Calculated (USD)
+    exchange_rate_usd_try: number;   // Rate used at record time
+    exchange_rate_date: string;      // Date of exchange rate
     description: string | null;
     created_at: string;
+    // Legacy field (for backwards compatibility)
+    amount: number;
 }
 
 export interface Expense {
@@ -84,9 +90,15 @@ export interface Expense {
     wallet_address: string;
     date: string;
     category: 'fixed' | 'variable';
-    amount: number;
+    // Currency fields
+    amount_try: number;              // Primary value (TRY)
+    amount_usd: number;              // Calculated (USD)
+    exchange_rate_usd_try: number;   // Rate used at record time
+    exchange_rate_date: string;      // Date of exchange rate
     description: string | null;
     created_at: string;
+    // Legacy field (for backwards compatibility)
+    amount: number;
 }
 
 export interface Investment {

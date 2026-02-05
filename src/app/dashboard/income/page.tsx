@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
 import { Income } from '@/types/database';
-import { formatDate, formatDateForInput, formatCurrency } from '@/lib/utils';
+import { formatDate, formatDateForInput } from '@/lib/utils';
+import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import { Plus, Trash2, TrendingUp, Briefcase, Gift, Loader2 } from 'lucide-react';
 
@@ -48,26 +49,41 @@ export default function IncomePage() {
         if (!session?.walletAddress) return;
 
         setSaving(true);
-        const supabase = createClient();
 
-        const { error } = await supabase.from('income').insert({
-            wallet_address: session.walletAddress.toLowerCase(),
-            date: formData.date,
-            category: formData.category,
-            amount: parseFloat(formData.amount),
-            description: formData.description || null,
-        });
+        try {
+            // Get current exchange rate
+            const rateData = await getUSDTRYRate();
+            const amountTry = parseFloat(formData.amount);
+            const amountUsd = convertTRYtoUSD(amountTry, rateData.rate);
 
-        if (!error) {
-            setFormData({
-                date: formatDateForInput(),
-                category: 'regular',
-                amount: '',
-                description: '',
+            const supabase = createClient();
+            const { error } = await supabase.from('income').insert({
+                wallet_address: session.walletAddress.toLowerCase(),
+                date: formData.date,
+                category: formData.category,
+                amount_try: amountTry,
+                amount_usd: amountUsd,
+                exchange_rate_usd_try: rateData.rate,
+                exchange_rate_date: rateData.date,
+                description: formData.description || null,
+                // Legacy field
+                amount: amountTry,
             });
-            setShowForm(false);
-            fetchRecords();
+
+            if (!error) {
+                setFormData({
+                    date: formatDateForInput(),
+                    category: 'regular',
+                    amount: '',
+                    description: '',
+                });
+                setShowForm(false);
+                fetchRecords();
+            }
+        } catch (error) {
+            console.error('Error saving income:', error);
         }
+
         setSaving(false);
     };
 
@@ -83,7 +99,8 @@ export default function IncomePage() {
         if (!acc[date]) {
             acc[date] = { regular: 0, additional: 0 };
         }
-        acc[date][record.category] += Number(record.amount);
+        const amount = record.amount_try || record.amount || 0;
+        acc[date][record.category] += Number(amount);
         return acc;
     }, {} as Record<string, { regular: number; additional: number }>);
 
@@ -96,13 +113,22 @@ export default function IncomePage() {
         }))
         .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Calculate totals
-    const totalRegular = records
+    // Calculate totals (TRY and USD)
+    const totalRegularTRY = records
         .filter(r => r.category === 'regular')
-        .reduce((sum, r) => sum + Number(r.amount), 0);
-    const totalAdditional = records
+        .reduce((sum, r) => sum + Number(r.amount_try || r.amount || 0), 0);
+    const totalAdditionalTRY = records
         .filter(r => r.category === 'additional')
-        .reduce((sum, r) => sum + Number(r.amount), 0);
+        .reduce((sum, r) => sum + Number(r.amount_try || r.amount || 0), 0);
+    const totalTRY = totalRegularTRY + totalAdditionalTRY;
+
+    const totalRegularUSD = records
+        .filter(r => r.category === 'regular')
+        .reduce((sum, r) => sum + Number(r.amount_usd || 0), 0);
+    const totalAdditionalUSD = records
+        .filter(r => r.category === 'additional')
+        .reduce((sum, r) => sum + Number(r.amount_usd || 0), 0);
+    const totalUSD = totalRegularUSD + totalAdditionalUSD;
 
     if (loading) {
         return (
@@ -158,14 +184,14 @@ export default function IncomePage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Amount ($)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Amount (₺)</label>
                                 <input
                                     type="number"
                                     step="0.01"
                                     min="0"
                                     value={formData.amount}
                                     onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                    placeholder="5000"
+                                    placeholder="25000"
                                     required
                                 />
                             </div>
@@ -208,8 +234,11 @@ export default function IncomePage() {
                         </div>
                         <span className="text-slate-400 text-sm">Total Income</span>
                     </div>
-                    <p className="text-4xl font-bold text-emerald-400">
-                        {formatCurrency(totalRegular + totalAdditional)}
+                    <p className="text-3xl font-bold text-emerald-400">
+                        {formatTRY(totalTRY)}
+                    </p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        {formatUSDSecondary(totalUSD)}
                     </p>
                 </div>
 
@@ -220,8 +249,11 @@ export default function IncomePage() {
                         </div>
                         <span className="text-slate-400 text-sm">Regular Income</span>
                     </div>
-                    <p className="text-3xl font-bold">
-                        {formatCurrency(totalRegular)}
+                    <p className="text-2xl font-bold">
+                        {formatTRY(totalRegularTRY)}
+                    </p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        {formatUSDSecondary(totalRegularUSD)}
                     </p>
                 </div>
 
@@ -232,8 +264,11 @@ export default function IncomePage() {
                         </div>
                         <span className="text-slate-400 text-sm">Additional Income</span>
                     </div>
-                    <p className="text-3xl font-bold">
-                        {formatCurrency(totalAdditional)}
+                    <p className="text-2xl font-bold">
+                        {formatTRY(totalAdditionalTRY)}
+                    </p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        {formatUSDSecondary(totalAdditionalUSD)}
                     </p>
                 </div>
             </div>
@@ -241,7 +276,7 @@ export default function IncomePage() {
             {/* Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Income Trend</h3>
+                    <h3 className="text-lg font-semibold mb-4">Income Trend (₺)</h3>
                     <TimeSeriesChart
                         data={chartData}
                         type="bar"
@@ -287,8 +322,17 @@ export default function IncomePage() {
                                                 {record.category === 'regular' ? 'Regular' : 'Additional'}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-sm font-medium text-emerald-400">
-                                            +{formatCurrency(Number(record.amount))}
+                                        <td className="px-4 py-3 text-sm">
+                                            <div>
+                                                <span className="font-medium text-emerald-400">
+                                                    +{formatTRY(Number(record.amount_try || record.amount || 0))}
+                                                </span>
+                                                {record.amount_usd && (
+                                                    <span className="text-slate-500 text-xs ml-2">
+                                                        {formatUSDSecondary(record.amount_usd)}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3 text-sm text-slate-400 max-w-xs truncate">
                                             {record.description || '-'}
