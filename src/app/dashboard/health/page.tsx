@@ -263,17 +263,23 @@ export default function HealthPage() {
                                     ))}
                                 </select>
                             </div>
-                            <div className="flex items-end">
+                            <div className="flex flex-col items-end gap-2">
                                 {currentActivityScore !== null && (
                                     <div className={`
                                         px-4 py-2 rounded-lg text-sm font-medium
-                                        ${currentActivityScore >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
-                                            currentActivityScore >= 60 ? 'bg-sky-500/20 text-sky-400' :
+                                        ${currentActivityScore >= 100 ? 'bg-emerald-500/20 text-emerald-400' :
+                                            currentActivityScore >= 80 ? 'bg-sky-500/20 text-sky-400' :
                                                 currentActivityScore >= 40 ? 'bg-amber-500/20 text-amber-400' :
                                                     'bg-red-500/20 text-red-400'}
                                     `}>
                                         Activity score: {currentActivityScore}/100
                                     </div>
+                                )}
+                                {formData.activity_level === 4 && (
+                                    <span className="text-xs text-emerald-400">Optimal and sustainable activity level.</span>
+                                )}
+                                {formData.activity_level === 5 && (
+                                    <span className="text-xs text-amber-400">High intensity increases physical stress and requires recovery.</span>
                                 )}
                             </div>
                         </div>
@@ -386,16 +392,16 @@ export default function HealthPage() {
                                                 <span className="text-slate-400">Illness Penalty</span>
                                                 <span className="text-red-400">-{scoreBreakdown.illnessPenalty}</span>
                                             </div>
-                                            {scoreBreakdown.overtrainingPenalty > 0 && (
+                                            {scoreBreakdown.recoveryState === 'recovering' && (
                                                 <div className="flex justify-between">
-                                                    <span className="text-orange-400">Overtraining Penalty</span>
-                                                    <span className="text-orange-400">-{scoreBreakdown.overtrainingPenalty}</span>
+                                                    <span className="text-orange-400">High Activity Load</span>
+                                                    <span className="text-orange-400">{scoreBreakdown.activityLoad.toFixed(1)}/5</span>
                                                 </div>
                                             )}
-                                            {scoreBreakdown.activeRecoveryBonus > 0 && (
+                                            {scoreBreakdown.recoveryBonus > 0 && (
                                                 <div className="flex justify-between">
-                                                    <span className="text-emerald-400">Active Recovery Bonus</span>
-                                                    <span className="text-emerald-400">+{scoreBreakdown.activeRecoveryBonus}</span>
+                                                    <span className="text-emerald-400">Recovery Bonus</span>
+                                                    <span className="text-emerald-400">+{scoreBreakdown.recoveryBonus}</span>
                                                 </div>
                                             )}
                                             <div className="border-t border-slate-700 pt-2 mt-2 flex justify-between font-semibold">
@@ -408,27 +414,27 @@ export default function HealthPage() {
                             </div>
                         </div>
 
-                        {/* Overtraining Warning Message */}
-                        {scoreBreakdown.overtrainingPenalty > 0 && (
+                        {/* High Activity Load Warning */}
+                        {scoreBreakdown.recoveryState === 'recovering' && (
                             <div className="flex items-start gap-3 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
                                 <ActivityIcon className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
                                 <div>
-                                    <p className="text-sm text-orange-300 font-medium">Intense activity for 3 days in a row</p>
+                                    <p className="text-sm text-orange-300 font-medium">High activity load detected</p>
                                     <p className="text-xs text-orange-400/70 mt-1">
-                                        Recovery days are important for progress. Consider a lighter activity day to help your body recover.
+                                        Your 3-day average activity is {scoreBreakdown.activityLoad.toFixed(1)}/5. Consider a moderate day (level 3) to recover and earn a bonus.
                                     </p>
                                 </div>
                             </div>
                         )}
 
-                        {/* Active Recovery Bonus Message */}
-                        {scoreBreakdown.activeRecoveryBonus > 0 && (
+                        {/* Recovery Bonus Message */}
+                        {scoreBreakdown.recoveryBonus > 0 && (
                             <div className="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
                                 <Heart className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
                                 <div>
                                     <p className="text-sm text-emerald-300 font-medium">Great recovery choice!</p>
                                     <p className="text-xs text-emerald-400/70 mt-1">
-                                        Taking a lighter activity day after intense days helps your body recover and makes you stronger.
+                                        Taking a moderate activity day after high load helps your body recover. +5 bonus applied!
                                     </p>
                                 </div>
                             </div>

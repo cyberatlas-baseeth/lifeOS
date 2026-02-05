@@ -12,6 +12,9 @@ export type IllnessStatus = 'none' | 'mild' | 'severe';
 // Activity levels 1-5
 export type ActivityLevel = 1 | 2 | 3 | 4 | 5;
 
+// Recovery state for tracking overload cycles
+export type RecoveryState = 'normal' | 'recovering' | 'recovered';
+
 // Sleep duration options (stored as hours)
 export type SleepDuration = 4.5 | 5.5 | 6.5 | 7.5 | 8.5 | 9.5 | 10.5;
 
@@ -22,7 +25,7 @@ export const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
     2: '2 – Light activity (short walks, household movement)',
     3: '3 – Moderate activity (30–45 min walking)',
     4: '4 – Active (sports, running, fitness)',
-    5: '5 – Intense training / very active day',
+    5: '5 – Intense training / very high effort',
 };
 
 export const SLEEP_OPTIONS: { value: SleepDuration; label: string }[] = [
@@ -81,10 +84,54 @@ export function calculateSleepScore(hours: number): number {
 
 /**
  * Convert activity level (1-5) to score (0-100)
- * Each level = 20 points
+ * Level 4 is optimal and sustainable (100 points)
+ * Level 5 is high stress and requires recovery (80 points)
  */
 export function calculateActivityScore(level: ActivityLevel): number {
-    return level * 20;
+    switch (level) {
+        case 1: return 20;
+        case 2: return 40;
+        case 3: return 60;
+        case 4: return 100; // ideal, sustainable day
+        case 5: return 80;  // high stress, requires recovery
+        default: return 0;
+    }
+}
+
+/**
+ * Calculate rolling activity load (average of last 3 days)
+ */
+export function calculateActivityLoad(last3DaysActivity: number[]): number {
+    if (last3DaysActivity.length === 0) return 0;
+    return last3DaysActivity.reduce((sum, level) => sum + level, 0) / last3DaysActivity.length;
+}
+
+/**
+ * Determine recovery state based on activity history
+ * Recovery bonus is given once per overload cycle when user takes a recovery day (level 3)
+ */
+export function calculateRecoveryState(
+    todayLevel: number,
+    last3DaysActivity: number[],
+    isIll: boolean
+): { state: RecoveryState; bonus: number; penalty: number } {
+    if (isIll) return { state: 'normal', bonus: 0, penalty: 0 };
+
+    const activityLoad = calculateActivityLoad(last3DaysActivity);
+
+    // Check if in overload state (high average load >= 4.5)
+    if (activityLoad >= 4.5) {
+        // User is in overload, check if today is a recovery day (level 3)
+        if (todayLevel === 3) {
+            // Taking a recovery day after overload - give bonus once
+            return { state: 'recovered', bonus: 5, penalty: 0 };
+        }
+        // Still in overload, no bonus yet
+        return { state: 'recovering', bonus: 0, penalty: 0 };
+    }
+
+    // Normal state, no bonuses or penalties
+    return { state: 'normal', bonus: 0, penalty: 0 };
 }
 
 /**
@@ -167,8 +214,10 @@ export interface HealthScoreBreakdown {
     activityScore: number;
     nutritionScore: number;
     illnessPenalty: number;
-    overtrainingPenalty: number;
-    activeRecoveryBonus: number;
+    recoveryState: RecoveryState;
+    recoveryBonus: number;
+    recoveryPenalty: number;
+    activityLoad: number;
     finalScore: number;
 }
 
@@ -206,19 +255,16 @@ export function getHealthScoreBreakdown(input: HealthScoreInput): HealthScoreBre
 
     const illnessPenalty = getIllnessPenalty(input.illnessStatus);
 
-    // Calculate overtraining penalty (need 3 days of data including today)
-    const overtrainingPenalty = input.last3DaysActivity
-        ? calculateOvertrainingPenalty(input.last3DaysActivity)
+    // Calculate activity load (rolling average of last 3 days)
+    const activityLoad = input.last3DaysActivity
+        ? calculateActivityLoad(input.last3DaysActivity)
         : 0;
 
-    // Calculate active recovery bonus
-    // last2Days = all but last element (today), todayLevel = last element
+    // Calculate recovery state and bonuses
     const isIll = input.illnessStatus === 'mild' || input.illnessStatus === 'severe';
-    let activeRecoveryBonus = 0;
-    if (input.last3DaysActivity && input.last3DaysActivity.length >= 2 && input.activityLevel) {
-        const last2Days = input.last3DaysActivity.slice(0, -1); // Exclude today
-        activeRecoveryBonus = calculateActiveRecoveryBonus(input.activityLevel, last2Days, isIll);
-    }
+    const recovery = input.last3DaysActivity && input.activityLevel
+        ? calculateRecoveryState(input.activityLevel, input.last3DaysActivity, isIll)
+        : { state: 'normal' as RecoveryState, bonus: 0, penalty: 0 };
 
     // Weights: sleep 0.40, activity 0.30, nutrition 0.30 = 1.0
     const weightedScore =
@@ -227,7 +273,7 @@ export function getHealthScoreBreakdown(input: HealthScoreInput): HealthScoreBre
         (nutritionScore * 0.30);
 
     // Apply penalties and bonuses after weighted calculation
-    const rawScore = weightedScore - illnessPenalty - overtrainingPenalty + activeRecoveryBonus;
+    const rawScore = weightedScore - illnessPenalty - recovery.penalty + recovery.bonus;
 
     const finalScore = Math.max(0, Math.min(100, Math.round(rawScore)));
 
@@ -236,8 +282,10 @@ export function getHealthScoreBreakdown(input: HealthScoreInput): HealthScoreBre
         activityScore,
         nutritionScore,
         illnessPenalty,
-        overtrainingPenalty,
-        activeRecoveryBonus,
+        recoveryState: recovery.state,
+        recoveryBonus: recovery.bonus,
+        recoveryPenalty: recovery.penalty,
+        activityLoad,
         finalScore,
     };
 }
