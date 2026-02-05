@@ -25,7 +25,6 @@ interface FormData {
     stress_level: StressLevel | '';
     motivation_level: MotivationLevel | '';
     mental_fatigue: FatigueLevel | '';
-    notes: string;
 }
 
 const initialFormData: FormData = {
@@ -33,7 +32,6 @@ const initialFormData: FormData = {
     stress_level: '',
     motivation_level: '',
     mental_fatigue: '',
-    notes: '',
 };
 
 export default function PsychologyPage() {
@@ -101,7 +99,6 @@ export default function PsychologyPage() {
             motivation_level: formData.motivation_level,
             mental_fatigue: formData.mental_fatigue,
             mental_score: mentalScore,
-            notes: formData.notes || null,
         }, {
             onConflict: 'wallet_address,date',
         });
@@ -126,7 +123,6 @@ export default function PsychologyPage() {
             stress_level: metric.stress_level || '',
             motivation_level: metric.motivation_level || '',
             mental_fatigue: metric.mental_fatigue || '',
-            notes: metric.notes || '',
         });
         setShowForm(true);
     };
@@ -297,17 +293,7 @@ export default function PsychologyPage() {
                         </div>
 
                         {/* Row 5: Mental Score Preview */}
-                        <div className="grid md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Notes</label>
-                                <textarea
-                                    value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    placeholder="How are you feeling mentally today?"
-                                    rows={2}
-                                    className="w-full"
-                                />
-                            </div>
+                        <div>
                             <div className="relative">
                                 <label className="block text-sm text-slate-400 mb-2 flex items-center gap-2">
                                     Mental Score
@@ -471,7 +457,6 @@ export default function PsychologyPage() {
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Motivation</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Fatigue</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Score</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Notes</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
                             </thead>
@@ -521,9 +506,6 @@ export default function PsychologyPage() {
                                             `}>
                                                 {metric.mental_score || '-'}
                                             </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-slate-400 max-w-xs truncate">
-                                            {metric.notes || '-'}
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="flex gap-1">

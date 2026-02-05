@@ -52,7 +52,6 @@ export interface PsychologyMetric {
     motivation_level: MotivationLevel | null;
     mental_fatigue: FatigueLevel | null;
     mental_score: number | null;
-    notes: string | null;
     created_at: string;
     // Legacy fields (for backwards compatibility)
     mood: number | null;
