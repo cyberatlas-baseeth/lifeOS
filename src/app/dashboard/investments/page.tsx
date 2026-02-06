@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
 import { Investment } from '@/types/database';
 import { formatDate, formatDateForInput } from '@/lib/utils';
-import { convertTRYtoUSD, formatTRY, formatUSDSecondary, DEFAULT_USD_TRY_RATE } from '@/lib/currency';
+import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
-import { Plus, Trash2, PiggyBank, TrendingUp, TrendingDown, Loader2, RefreshCw } from 'lucide-react';
+import LiveExchangeRate from '@/components/ui/LiveExchangeRate';
+import { Plus, Trash2, PiggyBank, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 
 const INVESTMENT_TYPES = [
     'Stocks',
@@ -32,20 +33,8 @@ export default function InvestmentsPage() {
         investment_type: 'Stocks',
         amount: '',
         profit_loss: '',
-        exchangeRate: DEFAULT_USD_TRY_RATE.toString(),
         notes: '',
     });
-
-    // Real-time USD previews
-    const usdPreview = useMemo(() => {
-        const rate = parseFloat(formData.exchangeRate) || DEFAULT_USD_TRY_RATE;
-        const amountTry = parseFloat(formData.amount) || 0;
-        const profitLossTry = parseFloat(formData.profit_loss) || 0;
-        return {
-            amount: convertTRYtoUSD(amountTry, rate),
-            profitLoss: convertTRYtoUSD(profitLossTry, rate),
-        };
-    }, [formData.amount, formData.profit_loss, formData.exchangeRate]);
 
     const fetchRecords = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -75,7 +64,8 @@ export default function InvestmentsPage() {
         setSaving(true);
 
         try {
-            const rate = parseFloat(formData.exchangeRate) || DEFAULT_USD_TRY_RATE;
+            // Auto-fetch current exchange rate
+            const rateData = await getUSDTRYRate();
             const amountTry = parseFloat(formData.amount);
             const profitLossTry = formData.profit_loss ? parseFloat(formData.profit_loss) : 0;
 
@@ -85,13 +75,12 @@ export default function InvestmentsPage() {
                 date: formData.date,
                 investment_type: formData.investment_type,
                 amount_try: amountTry,
-                amount_usd: convertTRYtoUSD(amountTry, rate),
+                amount_usd: convertTRYtoUSD(amountTry, rateData.rate),
                 profit_loss_try: profitLossTry,
-                profit_loss_usd: convertTRYtoUSD(profitLossTry, rate),
-                exchange_rate_usd_try: rate,
-                exchange_rate_date: new Date().toISOString().split('T')[0],
+                profit_loss_usd: convertTRYtoUSD(profitLossTry, rateData.rate),
+                exchange_rate_usd_try: rateData.rate,
+                exchange_rate_date: rateData.timestamp.split('T')[0],
                 notes: formData.notes || null,
-                // Legacy fields
                 amount: amountTry,
                 profit_loss: profitLossTry,
             });
@@ -102,7 +91,6 @@ export default function InvestmentsPage() {
                     investment_type: 'Stocks',
                     amount: '',
                     profit_loss: '',
-                    exchangeRate: formData.exchangeRate,
                     notes: '',
                 });
                 setShowForm(false);
@@ -151,7 +139,7 @@ export default function InvestmentsPage() {
         }))
         .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Calculate totals (TRY and USD)
+    // Calculate totals
     const totalInvestedTRY = records.reduce((sum, r) => sum + Number(r.amount_try || r.amount), 0);
     const totalProfitLossTRY = records.reduce((sum, r) => sum + Number(r.profit_loss_try || r.profit_loss || 0), 0);
     const totalInvestedUSD = records.reduce((sum, r) => sum + Number(r.amount_usd || 0), 0);
@@ -175,13 +163,16 @@ export default function InvestmentsPage() {
                         Track your investment portfolio and profit/loss status
                     </p>
                 </div>
-                <button
-                    onClick={() => setShowForm(!showForm)}
-                    className="btn btn-primary"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add Investment
-                </button>
+                <div className="flex items-center gap-3">
+                    <LiveExchangeRate />
+                    <button
+                        onClick={() => setShowForm(!showForm)}
+                        className="btn btn-primary"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add Investment
+                    </button>
+                </div>
             </div>
 
             {/* Form */}
@@ -189,7 +180,7 @@ export default function InvestmentsPage() {
                 <div className="glass-dark rounded-2xl p-6 slide-in">
                     <h3 className="text-lg font-semibold mb-4">New Investment Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
@@ -212,6 +203,27 @@ export default function InvestmentsPage() {
                                 </select>
                             </div>
                             <div>
+                                <label className="block text-sm text-slate-400 mb-2">Amount (₺ TRY)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={formData.amount}
+                                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                                    placeholder="100000"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-2">Profit/Loss (₺)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={formData.profit_loss}
+                                    onChange={(e) => setFormData({ ...formData, profit_loss: e.target.value })}
+                                    placeholder="5000 or -2000"
+                                />
+                            </div>
+                            <div>
                                 <label className="block text-sm text-slate-400 mb-2">Notes</label>
                                 <input
                                     type="text"
@@ -221,64 +233,6 @@ export default function InvestmentsPage() {
                                 />
                             </div>
                         </div>
-
-                        {/* Currency inputs */}
-                        <div className="glass rounded-xl p-4">
-                            <div className="flex items-center gap-2 mb-3">
-                                <RefreshCw className="w-4 h-4 text-primary-400" />
-                                <span className="text-sm font-medium text-slate-300">Currency Conversion</span>
-                            </div>
-
-                            {/* Exchange Rate */}
-                            <div className="mb-4">
-                                <label className="block text-sm text-slate-400 mb-2">USD/TRY Rate</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    value={formData.exchangeRate}
-                                    onChange={(e) => setFormData({ ...formData, exchangeRate: e.target.value })}
-                                    placeholder={DEFAULT_USD_TRY_RATE.toString()}
-                                    required
-                                    className="max-w-xs"
-                                />
-                            </div>
-
-                            <div className="grid md:grid-cols-2 gap-4">
-                                {/* Amount */}
-                                <div className="glass rounded-lg p-3">
-                                    <label className="block text-sm text-slate-400 mb-2">Amount (₺ TRY)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.amount}
-                                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                        placeholder="100000"
-                                        required
-                                        className="text-lg font-medium"
-                                    />
-                                    <div className="mt-2 text-sm text-slate-500">
-                                        {usdPreview.amount > 0 ? `≈ $${usdPreview.amount.toLocaleString()}` : '-'}
-                                    </div>
-                                </div>
-
-                                {/* Profit/Loss */}
-                                <div className="glass rounded-lg p-3">
-                                    <label className="block text-sm text-slate-400 mb-2">Profit/Loss (₺ TRY)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.profit_loss}
-                                        onChange={(e) => setFormData({ ...formData, profit_loss: e.target.value })}
-                                        placeholder="5000 or -2000"
-                                    />
-                                    <div className="mt-2 text-sm text-slate-500">
-                                        {formData.profit_loss ? `≈ $${usdPreview.profitLoss.toLocaleString()}` : '-'}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                         <div className="flex justify-end gap-3">
                             <button
                                 type="button"

@@ -1,22 +1,22 @@
 // Currency utilities for TRY/USD conversion
 // TRY is the primary currency, USD is for comparison only
+// Uses MoneyConvert API for live exchange rates
 
 export interface ExchangeRateData {
-    rate: number;       // USD/TRY rate (e.g., 32.5 means 1 USD = 32.5 TRY)
-    date: string;       // ISO date string
+    rate: number;       // USD/TRY rate (e.g., 36.5 means 1 USD = 36.5 TRY)
+    timestamp: string;  // ISO timestamp
 }
 
-// Cache exchange rate for 1 hour
+// Cache settings
 let cachedRate: ExchangeRateData | null = null;
 let cacheTimestamp: number = 0;
-const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
-
-// Default exchange rate for manual input
-export const DEFAULT_USD_TRY_RATE = 36.5;
+const CACHE_DURATION_MS = 15 * 60 * 1000; // 15 minutes for live display
+const FALLBACK_RATE = 36.5; // Fallback if API fails
 
 /**
- * Fetch current USD/TRY exchange rate
- * Uses exchangerate-api.com free tier
+ * Fetch live USD/TRY exchange rate from MoneyConvert API
+ * Used for both live display and record saving
+ * Results are cached for 15 minutes
  */
 export async function getUSDTRYRate(): Promise<ExchangeRateData> {
     const now = Date.now();
@@ -27,14 +27,15 @@ export async function getUSDTRYRate(): Promise<ExchangeRateData> {
     }
 
     try {
-        // Using exchangerate-api.com free tier
-        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        // Using MoneyConvert API (no API key required)
+        const response = await fetch('https://cdn.moneyconvert.net/api/latest.json');
 
         if (!response.ok) {
             throw new Error('Exchange rate API error');
         }
 
         const data = await response.json();
+        // MoneyConvert returns rates relative to USD
         const rate = data.rates?.TRY;
 
         if (!rate) {
@@ -43,7 +44,7 @@ export async function getUSDTRYRate(): Promise<ExchangeRateData> {
 
         cachedRate = {
             rate: rate,
-            date: new Date().toISOString().split('T')[0],
+            timestamp: new Date().toISOString(),
         };
         cacheTimestamp = now;
 
@@ -51,12 +52,32 @@ export async function getUSDTRYRate(): Promise<ExchangeRateData> {
     } catch (error) {
         console.error('Failed to fetch exchange rate:', error);
 
-        // Fallback rate if API fails
+        // Return cached rate if available, otherwise fallback
+        if (cachedRate) {
+            return cachedRate;
+        }
+
         return {
-            rate: 32.5, // Approximate fallback
-            date: new Date().toISOString().split('T')[0],
+            rate: FALLBACK_RATE,
+            timestamp: new Date().toISOString(),
         };
     }
+}
+
+/**
+ * Get cached rate synchronously (for UI display)
+ * Returns null if no rate is cached yet
+ */
+export function getCachedRate(): ExchangeRateData | null {
+    return cachedRate;
+}
+
+/**
+ * Check if cache is stale (older than 15 minutes)
+ */
+export function isCacheStale(): boolean {
+    if (!cachedRate) return true;
+    return (Date.now() - cacheTimestamp) >= CACHE_DURATION_MS;
 }
 
 /**

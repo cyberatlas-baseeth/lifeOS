@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
 import { NetWorth } from '@/types/database';
 import { formatDate, formatDateForInput } from '@/lib/utils';
-import { convertTRYtoUSD, formatTRY, formatUSDSecondary, DEFAULT_USD_TRY_RATE } from '@/lib/currency';
+import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
-import { Plus, Trash2, Wallet, Banknote, Loader2, RefreshCw } from 'lucide-react';
+import LiveExchangeRate from '@/components/ui/LiveExchangeRate';
+import { Plus, Trash2, Wallet, Banknote, Loader2 } from 'lucide-react';
 
 export default function NetWorthPage() {
     const { session } = useWallet();
@@ -20,20 +21,8 @@ export default function NetWorthPage() {
         date: formatDateForInput(),
         total_assets: '',
         cash: '',
-        exchangeRate: DEFAULT_USD_TRY_RATE.toString(),
         notes: '',
     });
-
-    // Real-time USD previews
-    const usdPreview = useMemo(() => {
-        const rate = parseFloat(formData.exchangeRate) || DEFAULT_USD_TRY_RATE;
-        const assetsTry = parseFloat(formData.total_assets) || 0;
-        const cashTry = parseFloat(formData.cash) || 0;
-        return {
-            assets: convertTRYtoUSD(assetsTry, rate),
-            cash: convertTRYtoUSD(cashTry, rate),
-        };
-    }, [formData.total_assets, formData.cash, formData.exchangeRate]);
 
     const fetchMetrics = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -63,7 +52,8 @@ export default function NetWorthPage() {
         setSaving(true);
 
         try {
-            const rate = parseFloat(formData.exchangeRate) || DEFAULT_USD_TRY_RATE;
+            // Auto-fetch current exchange rate
+            const rateData = await getUSDTRYRate();
             const assetsTry = formData.total_assets ? parseFloat(formData.total_assets) : null;
             const cashTry = formData.cash ? parseFloat(formData.cash) : null;
 
@@ -72,13 +62,12 @@ export default function NetWorthPage() {
                 wallet_address: session.walletAddress.toLowerCase(),
                 date: formData.date,
                 total_assets_try: assetsTry,
-                total_assets_usd: assetsTry ? convertTRYtoUSD(assetsTry, rate) : null,
+                total_assets_usd: assetsTry ? convertTRYtoUSD(assetsTry, rateData.rate) : null,
                 cash_try: cashTry,
-                cash_usd: cashTry ? convertTRYtoUSD(cashTry, rate) : null,
-                exchange_rate_usd_try: rate,
-                exchange_rate_date: new Date().toISOString().split('T')[0],
+                cash_usd: cashTry ? convertTRYtoUSD(cashTry, rateData.rate) : null,
+                exchange_rate_usd_try: rateData.rate,
+                exchange_rate_date: rateData.timestamp.split('T')[0],
                 notes: formData.notes || null,
-                // Legacy fields
                 total_assets: assetsTry,
                 cash: cashTry,
             }, {
@@ -90,7 +79,6 @@ export default function NetWorthPage() {
                     date: formatDateForInput(),
                     total_assets: '',
                     cash: '',
-                    exchangeRate: formData.exchangeRate,
                     notes: '',
                 });
                 setShowForm(false);
@@ -145,13 +133,16 @@ export default function NetWorthPage() {
                         Track your total assets and cash position
                     </p>
                 </div>
-                <button
-                    onClick={() => setShowForm(!showForm)}
-                    className="btn btn-primary"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add Entry
-                </button>
+                <div className="flex items-center gap-3">
+                    <LiveExchangeRate />
+                    <button
+                        onClick={() => setShowForm(!showForm)}
+                        className="btn btn-primary"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add Entry
+                    </button>
+                </div>
             </div>
 
             {/* Form */}
@@ -159,7 +150,7 @@ export default function NetWorthPage() {
                 <div className="glass-dark rounded-2xl p-6 slide-in">
                     <h3 className="text-lg font-semibold mb-4">New Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid md:grid-cols-2 gap-4">
+                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
@@ -167,6 +158,28 @@ export default function NetWorthPage() {
                                     value={formData.date}
                                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                     required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-2">Total Assets (₺ TRY)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={formData.total_assets}
+                                    onChange={(e) => setFormData({ ...formData, total_assets: e.target.value })}
+                                    placeholder="1000000"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-2">Cash (₺ TRY)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={formData.cash}
+                                    onChange={(e) => setFormData({ ...formData, cash: e.target.value })}
+                                    placeholder="250000"
                                 />
                             </div>
                             <div>
@@ -179,65 +192,6 @@ export default function NetWorthPage() {
                                 />
                             </div>
                         </div>
-
-                        {/* Currency inputs */}
-                        <div className="glass rounded-xl p-4">
-                            <div className="flex items-center gap-2 mb-3">
-                                <RefreshCw className="w-4 h-4 text-primary-400" />
-                                <span className="text-sm font-medium text-slate-300">Currency Conversion</span>
-                            </div>
-
-                            {/* Exchange Rate */}
-                            <div className="mb-4">
-                                <label className="block text-sm text-slate-400 mb-2">USD/TRY Rate</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    value={formData.exchangeRate}
-                                    onChange={(e) => setFormData({ ...formData, exchangeRate: e.target.value })}
-                                    placeholder={DEFAULT_USD_TRY_RATE.toString()}
-                                    required
-                                    className="max-w-xs"
-                                />
-                            </div>
-
-                            <div className="grid md:grid-cols-2 gap-4">
-                                {/* Total Assets */}
-                                <div className="glass rounded-lg p-3">
-                                    <label className="block text-sm text-slate-400 mb-2">Total Assets (₺ TRY)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        value={formData.total_assets}
-                                        onChange={(e) => setFormData({ ...formData, total_assets: e.target.value })}
-                                        placeholder="1000000"
-                                        className="text-lg font-medium"
-                                    />
-                                    <div className="mt-2 text-sm text-slate-500">
-                                        {usdPreview.assets > 0 ? `≈ $${usdPreview.assets.toLocaleString()}` : '-'}
-                                    </div>
-                                </div>
-
-                                {/* Cash */}
-                                <div className="glass rounded-lg p-3">
-                                    <label className="block text-sm text-slate-400 mb-2">Cash (₺ TRY)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        value={formData.cash}
-                                        onChange={(e) => setFormData({ ...formData, cash: e.target.value })}
-                                        placeholder="250000"
-                                    />
-                                    <div className="mt-2 text-sm text-slate-500">
-                                        {usdPreview.cash > 0 ? `≈ $${usdPreview.cash.toLocaleString()}` : '-'}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                         <div className="flex justify-end gap-3">
                             <button
                                 type="button"
