@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
 import { Income } from '@/types/database';
@@ -9,6 +9,10 @@ import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import LiveExchangeRate from '@/components/ui/LiveExchangeRate';
 import { Plus, Trash2, TrendingUp, Briefcase, Gift, Loader2 } from 'lucide-react';
+
+// Tag options for each category
+const REGULAR_INCOME_TAGS = ['salary'];
+const ADDITIONAL_INCOME_TAGS = ['crypto'];
 
 export default function IncomePage() {
     const { session } = useWallet();
@@ -20,9 +24,18 @@ export default function IncomePage() {
     const [formData, setFormData] = useState({
         date: formatDateForInput(),
         category: 'regular' as 'regular' | 'additional',
+        tag: 'salary',
         amount: '',
-        description: '',
     });
+
+    // Update tag when category changes
+    const handleCategoryChange = (category: 'regular' | 'additional') => {
+        setFormData({
+            ...formData,
+            category,
+            tag: category === 'regular' ? 'salary' : 'crypto',
+        });
+    };
 
     const fetchRecords = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -52,7 +65,7 @@ export default function IncomePage() {
         setSaving(true);
 
         try {
-            // Auto-fetch current exchange rate (no manual input)
+            // Auto-fetch current exchange rate
             const rateData = await getUSDTRYRate();
             const amountTry = parseFloat(formData.amount);
             const amountUsd = convertTRYtoUSD(amountTry, rateData.rate);
@@ -62,11 +75,11 @@ export default function IncomePage() {
                 wallet_address: session.walletAddress.toLowerCase(),
                 date: formData.date,
                 category: formData.category,
+                tag: formData.tag,
                 amount_try: amountTry,
                 amount_usd: amountUsd,
                 exchange_rate_usd_try: rateData.rate,
                 exchange_rate_date: rateData.timestamp.split('T')[0],
-                description: formData.description || null,
                 amount: amountTry,
             });
 
@@ -74,8 +87,8 @@ export default function IncomePage() {
                 setFormData({
                     date: formatDateForInput(),
                     category: 'regular',
+                    tag: 'salary',
                     amount: '',
-                    description: '',
                 });
                 setShowForm(false);
                 fetchRecords();
@@ -92,6 +105,9 @@ export default function IncomePage() {
         await supabase.from('income').delete().eq('id', id);
         fetchRecords();
     };
+
+    // Get available tags based on category
+    const availableTags = formData.category === 'regular' ? REGULAR_INCOME_TAGS : ADDITIONAL_INCOME_TAGS;
 
     // Group by date for chart
     const groupedData = records.reduce((acc, record) => {
@@ -179,11 +195,25 @@ export default function IncomePage() {
                                 <label className="block text-sm text-slate-400 mb-2">Category</label>
                                 <select
                                     value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value as 'regular' | 'additional' })}
+                                    onChange={(e) => handleCategoryChange(e.target.value as 'regular' | 'additional')}
                                     required
                                 >
                                     <option value="regular">Regular Income</option>
                                     <option value="additional">Additional Income</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-2">Tag *</label>
+                                <select
+                                    value={formData.tag}
+                                    onChange={(e) => setFormData({ ...formData, tag: e.target.value })}
+                                    required
+                                >
+                                    {availableTags.map((tag) => (
+                                        <option key={tag} value={tag}>
+                                            {tag.charAt(0).toUpperCase() + tag.slice(1)}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                             <div>
@@ -196,15 +226,6 @@ export default function IncomePage() {
                                     onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                                     placeholder="25000"
                                     required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Description</label>
-                                <input
-                                    type="text"
-                                    value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    placeholder="Salary, freelance, etc."
                                 />
                             </div>
                         </div>
@@ -306,9 +327,9 @@ export default function IncomePage() {
                                 <tr className="border-b border-slate-700/50">
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Category</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Tag</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Amount</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Rate</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Description</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
                             </thead>
@@ -327,6 +348,11 @@ export default function IncomePage() {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 text-sm">
+                                            <span className="px-2 py-1 rounded-lg text-xs font-medium bg-slate-700/50 text-slate-300">
+                                                {record.tag || '-'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm">
                                             <div>
                                                 <span className="font-medium text-emerald-400">
                                                     +{formatTRY(Number(record.amount_try || record.amount || 0))}
@@ -340,9 +366,6 @@ export default function IncomePage() {
                                         </td>
                                         <td className="px-4 py-3 text-sm text-slate-400">
                                             {record.exchange_rate_usd_try ? `${record.exchange_rate_usd_try.toFixed(2)}` : '-'}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-slate-400 max-w-xs truncate">
-                                            {record.description || '-'}
                                         </td>
                                         <td className="px-4 py-3">
                                             <button

@@ -82,12 +82,12 @@ export interface Income {
     wallet_address: string;
     date: string;
     category: 'regular' | 'additional';
+    tag: string;                         // Required: 'salary' for regular, 'crypto' for additional
     // Currency fields
-    amount_try: number;              // Primary value (TRY)
-    amount_usd: number;              // Calculated (USD)
-    exchange_rate_usd_try: number;   // Rate used at record time
-    exchange_rate_date: string;      // Date of exchange rate
-    description: string | null;
+    amount_try: number;                  // Primary value (TRY)
+    amount_usd: number;                  // Calculated (USD)
+    exchange_rate_usd_try: number;       // Rate used at record time
+    exchange_rate_date: string;          // Date of exchange rate
     created_at: string;
     // Legacy field (for backwards compatibility)
     amount: number;
