@@ -11,6 +11,9 @@ let cachedRate: ExchangeRateData | null = null;
 let cacheTimestamp: number = 0;
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
 
+// Default exchange rate for manual input
+export const DEFAULT_USD_TRY_RATE = 36.5;
+
 /**
  * Fetch current USD/TRY exchange rate
  * Uses exchangerate-api.com free tier

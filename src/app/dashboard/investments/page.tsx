@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
 import { Investment } from '@/types/database';
-import { formatDate, formatDateForInput, formatCurrency } from '@/lib/utils';
+import { formatDate, formatDateForInput } from '@/lib/utils';
+import { convertTRYtoUSD, formatTRY, formatUSDSecondary, DEFAULT_USD_TRY_RATE } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
-import { Plus, Trash2, PiggyBank, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { Plus, Trash2, PiggyBank, TrendingUp, TrendingDown, Loader2, RefreshCw } from 'lucide-react';
 
 const INVESTMENT_TYPES = [
     'Stocks',
@@ -31,8 +32,20 @@ export default function InvestmentsPage() {
         investment_type: 'Stocks',
         amount: '',
         profit_loss: '',
+        exchangeRate: DEFAULT_USD_TRY_RATE.toString(),
         notes: '',
     });
+
+    // Real-time USD previews
+    const usdPreview = useMemo(() => {
+        const rate = parseFloat(formData.exchangeRate) || DEFAULT_USD_TRY_RATE;
+        const amountTry = parseFloat(formData.amount) || 0;
+        const profitLossTry = parseFloat(formData.profit_loss) || 0;
+        return {
+            amount: convertTRYtoUSD(amountTry, rate),
+            profitLoss: convertTRYtoUSD(profitLossTry, rate),
+        };
+    }, [formData.amount, formData.profit_loss, formData.exchangeRate]);
 
     const fetchRecords = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -60,28 +73,45 @@ export default function InvestmentsPage() {
         if (!session?.walletAddress) return;
 
         setSaving(true);
-        const supabase = createClient();
 
-        const { error } = await supabase.from('investments').insert({
-            wallet_address: session.walletAddress.toLowerCase(),
-            date: formData.date,
-            investment_type: formData.investment_type,
-            amount: parseFloat(formData.amount),
-            profit_loss: formData.profit_loss ? parseFloat(formData.profit_loss) : 0,
-            notes: formData.notes || null,
-        });
+        try {
+            const rate = parseFloat(formData.exchangeRate) || DEFAULT_USD_TRY_RATE;
+            const amountTry = parseFloat(formData.amount);
+            const profitLossTry = formData.profit_loss ? parseFloat(formData.profit_loss) : 0;
 
-        if (!error) {
-            setFormData({
-                date: formatDateForInput(),
-                investment_type: 'Stocks',
-                amount: '',
-                profit_loss: '',
-                notes: '',
+            const supabase = createClient();
+            const { error } = await supabase.from('investments').insert({
+                wallet_address: session.walletAddress.toLowerCase(),
+                date: formData.date,
+                investment_type: formData.investment_type,
+                amount_try: amountTry,
+                amount_usd: convertTRYtoUSD(amountTry, rate),
+                profit_loss_try: profitLossTry,
+                profit_loss_usd: convertTRYtoUSD(profitLossTry, rate),
+                exchange_rate_usd_try: rate,
+                exchange_rate_date: new Date().toISOString().split('T')[0],
+                notes: formData.notes || null,
+                // Legacy fields
+                amount: amountTry,
+                profit_loss: profitLossTry,
             });
-            setShowForm(false);
-            fetchRecords();
+
+            if (!error) {
+                setFormData({
+                    date: formatDateForInput(),
+                    investment_type: 'Stocks',
+                    amount: '',
+                    profit_loss: '',
+                    exchangeRate: formData.exchangeRate,
+                    notes: '',
+                });
+                setShowForm(false);
+                fetchRecords();
+            }
+        } catch (error) {
+            console.error('Error saving investment:', error);
         }
+
         setSaving(false);
     };
 
@@ -97,8 +127,8 @@ export default function InvestmentsPage() {
         if (!acc[type]) {
             acc[type] = { amount: 0, profitLoss: 0 };
         }
-        acc[type].amount += Number(record.amount);
-        acc[type].profitLoss += Number(record.profit_loss || 0);
+        acc[type].amount += Number(record.amount_try || record.amount);
+        acc[type].profitLoss += Number(record.profit_loss_try || record.profit_loss || 0);
         return acc;
     }, {} as Record<string, { amount: number; profitLoss: number }>);
 
@@ -108,8 +138,8 @@ export default function InvestmentsPage() {
         if (!acc[date]) {
             acc[date] = { amount: 0, profitLoss: 0 };
         }
-        acc[date].amount += Number(record.amount);
-        acc[date].profitLoss += Number(record.profit_loss || 0);
+        acc[date].amount += Number(record.amount_try || record.amount);
+        acc[date].profitLoss += Number(record.profit_loss_try || record.profit_loss || 0);
         return acc;
     }, {} as Record<string, { amount: number; profitLoss: number }>);
 
@@ -121,9 +151,11 @@ export default function InvestmentsPage() {
         }))
         .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Calculate totals
-    const totalInvested = records.reduce((sum, r) => sum + Number(r.amount), 0);
-    const totalProfitLoss = records.reduce((sum, r) => sum + Number(r.profit_loss || 0), 0);
+    // Calculate totals (TRY and USD)
+    const totalInvestedTRY = records.reduce((sum, r) => sum + Number(r.amount_try || r.amount), 0);
+    const totalProfitLossTRY = records.reduce((sum, r) => sum + Number(r.profit_loss_try || r.profit_loss || 0), 0);
+    const totalInvestedUSD = records.reduce((sum, r) => sum + Number(r.amount_usd || 0), 0);
+    const totalProfitLossUSD = records.reduce((sum, r) => sum + Number(r.profit_loss_usd || 0), 0);
 
     if (loading) {
         return (
@@ -157,7 +189,7 @@ export default function InvestmentsPage() {
                 <div className="glass-dark rounded-2xl p-6 slide-in">
                     <h3 className="text-lg font-semibold mb-4">New Investment Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
@@ -180,27 +212,6 @@ export default function InvestmentsPage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Amount ($)</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.amount}
-                                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                    placeholder="10000"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Profit/Loss ($)</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.profit_loss}
-                                    onChange={(e) => setFormData({ ...formData, profit_loss: e.target.value })}
-                                    placeholder="500 or -200"
-                                />
-                            </div>
-                            <div>
                                 <label className="block text-sm text-slate-400 mb-2">Notes</label>
                                 <input
                                     type="text"
@@ -210,6 +221,64 @@ export default function InvestmentsPage() {
                                 />
                             </div>
                         </div>
+
+                        {/* Currency inputs */}
+                        <div className="glass rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <RefreshCw className="w-4 h-4 text-primary-400" />
+                                <span className="text-sm font-medium text-slate-300">Currency Conversion</span>
+                            </div>
+
+                            {/* Exchange Rate */}
+                            <div className="mb-4">
+                                <label className="block text-sm text-slate-400 mb-2">USD/TRY Rate</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    value={formData.exchangeRate}
+                                    onChange={(e) => setFormData({ ...formData, exchangeRate: e.target.value })}
+                                    placeholder={DEFAULT_USD_TRY_RATE.toString()}
+                                    required
+                                    className="max-w-xs"
+                                />
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                {/* Amount */}
+                                <div className="glass rounded-lg p-3">
+                                    <label className="block text-sm text-slate-400 mb-2">Amount (₺ TRY)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.amount}
+                                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                                        placeholder="100000"
+                                        required
+                                        className="text-lg font-medium"
+                                    />
+                                    <div className="mt-2 text-sm text-slate-500">
+                                        {usdPreview.amount > 0 ? `≈ $${usdPreview.amount.toLocaleString()}` : '-'}
+                                    </div>
+                                </div>
+
+                                {/* Profit/Loss */}
+                                <div className="glass rounded-lg p-3">
+                                    <label className="block text-sm text-slate-400 mb-2">Profit/Loss (₺ TRY)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.profit_loss}
+                                        onChange={(e) => setFormData({ ...formData, profit_loss: e.target.value })}
+                                        placeholder="5000 or -2000"
+                                    />
+                                    <div className="mt-2 text-sm text-slate-500">
+                                        {formData.profit_loss ? `≈ $${usdPreview.profitLoss.toLocaleString()}` : '-'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="flex justify-end gap-3">
                             <button
                                 type="button"
@@ -239,23 +308,29 @@ export default function InvestmentsPage() {
                         </div>
                         <span className="text-slate-400 text-sm">Total Investment</span>
                     </div>
-                    <p className="text-4xl font-bold">
-                        {formatCurrency(totalInvested)}
+                    <p className="text-3xl font-bold">
+                        {formatTRY(totalInvestedTRY)}
+                    </p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        {formatUSDSecondary(totalInvestedUSD)}
                     </p>
                 </div>
 
                 <div className="glass-dark rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-4">
-                        <div className={`w-12 h-12 rounded-xl ${totalProfitLoss >= 0 ? 'bg-emerald-500/20' : 'bg-red-500/20'} flex items-center justify-center`}>
-                            {totalProfitLoss >= 0
+                        <div className={`w-12 h-12 rounded-xl ${totalProfitLossTRY >= 0 ? 'bg-emerald-500/20' : 'bg-red-500/20'} flex items-center justify-center`}>
+                            {totalProfitLossTRY >= 0
                                 ? <TrendingUp className="w-6 h-6 text-emerald-400" />
                                 : <TrendingDown className="w-6 h-6 text-red-400" />
                             }
                         </div>
                         <span className="text-slate-400 text-sm">Total Profit/Loss</span>
                     </div>
-                    <p className={`text-4xl font-bold ${totalProfitLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {totalProfitLoss >= 0 ? '+' : ''}{formatCurrency(totalProfitLoss)}
+                    <p className={`text-3xl font-bold ${totalProfitLossTRY >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {totalProfitLossTRY >= 0 ? '+' : ''}{formatTRY(totalProfitLossTRY)}
+                    </p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        {totalProfitLossTRY >= 0 ? '+' : ''}{formatUSDSecondary(totalProfitLossUSD)}
                     </p>
                 </div>
 
@@ -266,9 +341,9 @@ export default function InvestmentsPage() {
                         </div>
                         <span className="text-slate-400 text-sm">Return Rate</span>
                     </div>
-                    <p className={`text-4xl font-bold ${totalProfitLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {totalInvested > 0
-                            ? `${((totalProfitLoss / totalInvested) * 100).toFixed(1)}%`
+                    <p className={`text-4xl font-bold ${totalProfitLossTRY >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {totalInvestedTRY > 0
+                            ? `${((totalProfitLossTRY / totalInvestedTRY) * 100).toFixed(1)}%`
                             : '0%'
                         }
                     </p>
@@ -285,14 +360,14 @@ export default function InvestmentsPage() {
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="font-medium">{type}</span>
                                     <span className={`text-xs font-medium ${data.profitLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                        {data.profitLoss >= 0 ? '+' : ''}{formatCurrency(data.profitLoss)}
+                                        {data.profitLoss >= 0 ? '+' : ''}{formatTRY(data.profitLoss)}
                                     </span>
                                 </div>
-                                <p className="text-xl font-bold">{formatCurrency(data.amount)}</p>
+                                <p className="text-xl font-bold">{formatTRY(data.amount)}</p>
                                 <div className="mt-2 h-2 bg-slate-700 rounded-full overflow-hidden">
                                     <div
                                         className="h-full bg-gradient-to-r from-primary-500 to-accent-500"
-                                        style={{ width: `${(data.amount / totalInvested) * 100}%` }}
+                                        style={{ width: `${(data.amount / totalInvestedTRY) * 100}%` }}
                                     />
                                 </div>
                             </div>
@@ -304,11 +379,11 @@ export default function InvestmentsPage() {
             {/* Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Profit/Loss Trend</h3>
+                    <h3 className="text-lg font-semibold mb-4">Profit/Loss Trend (₺)</h3>
                     <TimeSeriesChart
                         data={chartData}
                         lines={[
-                            { dataKey: 'profitLoss', name: 'Profit/Loss', color: totalProfitLoss >= 0 ? '#10b981' : '#ef4444' },
+                            { dataKey: 'profitLoss', name: 'Profit/Loss', color: totalProfitLossTRY >= 0 ? '#10b981' : '#ef4444' },
                         ]}
                         height={300}
                         showLegend={false}
@@ -332,6 +407,7 @@ export default function InvestmentsPage() {
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Type</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Amount</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Profit/Loss</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Rate</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Notes</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
@@ -345,15 +421,33 @@ export default function InvestmentsPage() {
                                                 {record.investment_type}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-sm font-medium">
-                                            {formatCurrency(Number(record.amount))}
+                                        <td className="px-4 py-3 text-sm">
+                                            <div>
+                                                <span className="font-medium">
+                                                    {formatTRY(Number(record.amount_try || record.amount))}
+                                                </span>
+                                                {record.amount_usd && (
+                                                    <span className="text-slate-500 text-xs ml-2">
+                                                        {formatUSDSecondary(record.amount_usd)}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3 text-sm">
-                                            <span className={`font-medium ${Number(record.profit_loss || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
-                                                }`}>
-                                                {Number(record.profit_loss || 0) >= 0 ? '+' : ''}
-                                                {formatCurrency(Number(record.profit_loss || 0))}
-                                            </span>
+                                            <div>
+                                                <span className={`font-medium ${Number(record.profit_loss_try || record.profit_loss || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {Number(record.profit_loss_try || record.profit_loss || 0) >= 0 ? '+' : ''}
+                                                    {formatTRY(Number(record.profit_loss_try || record.profit_loss || 0))}
+                                                </span>
+                                                {record.profit_loss_usd && (
+                                                    <span className="text-slate-500 text-xs ml-2">
+                                                        {formatUSDSecondary(record.profit_loss_usd)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-slate-400">
+                                            {record.exchange_rate_usd_try ? `${record.exchange_rate_usd_try.toFixed(2)}` : '-'}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-slate-400 max-w-xs truncate">
                                             {record.notes || '-'}

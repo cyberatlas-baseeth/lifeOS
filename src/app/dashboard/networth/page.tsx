@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
 import { NetWorth } from '@/types/database';
-import { formatDate, formatDateForInput, formatCurrency } from '@/lib/utils';
+import { formatDate, formatDateForInput } from '@/lib/utils';
+import { convertTRYtoUSD, formatTRY, formatUSDSecondary, DEFAULT_USD_TRY_RATE } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
-import { Plus, Trash2, Wallet, Banknote, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Wallet, Banknote, Loader2, RefreshCw } from 'lucide-react';
 
 export default function NetWorthPage() {
     const { session } = useWallet();
@@ -19,8 +20,20 @@ export default function NetWorthPage() {
         date: formatDateForInput(),
         total_assets: '',
         cash: '',
+        exchangeRate: DEFAULT_USD_TRY_RATE.toString(),
         notes: '',
     });
+
+    // Real-time USD previews
+    const usdPreview = useMemo(() => {
+        const rate = parseFloat(formData.exchangeRate) || DEFAULT_USD_TRY_RATE;
+        const assetsTry = parseFloat(formData.total_assets) || 0;
+        const cashTry = parseFloat(formData.cash) || 0;
+        return {
+            assets: convertTRYtoUSD(assetsTry, rate),
+            cash: convertTRYtoUSD(cashTry, rate),
+        };
+    }, [formData.total_assets, formData.cash, formData.exchangeRate]);
 
     const fetchMetrics = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -48,28 +61,45 @@ export default function NetWorthPage() {
         if (!session?.walletAddress) return;
 
         setSaving(true);
-        const supabase = createClient();
 
-        const { error } = await supabase.from('net_worth').upsert({
-            wallet_address: session.walletAddress.toLowerCase(),
-            date: formData.date,
-            total_assets: formData.total_assets ? parseFloat(formData.total_assets) : null,
-            cash: formData.cash ? parseFloat(formData.cash) : null,
-            notes: formData.notes || null,
-        }, {
-            onConflict: 'wallet_address,date',
-        });
+        try {
+            const rate = parseFloat(formData.exchangeRate) || DEFAULT_USD_TRY_RATE;
+            const assetsTry = formData.total_assets ? parseFloat(formData.total_assets) : null;
+            const cashTry = formData.cash ? parseFloat(formData.cash) : null;
 
-        if (!error) {
-            setFormData({
-                date: formatDateForInput(),
-                total_assets: '',
-                cash: '',
-                notes: '',
+            const supabase = createClient();
+            const { error } = await supabase.from('net_worth').upsert({
+                wallet_address: session.walletAddress.toLowerCase(),
+                date: formData.date,
+                total_assets_try: assetsTry,
+                total_assets_usd: assetsTry ? convertTRYtoUSD(assetsTry, rate) : null,
+                cash_try: cashTry,
+                cash_usd: cashTry ? convertTRYtoUSD(cashTry, rate) : null,
+                exchange_rate_usd_try: rate,
+                exchange_rate_date: new Date().toISOString().split('T')[0],
+                notes: formData.notes || null,
+                // Legacy fields
+                total_assets: assetsTry,
+                cash: cashTry,
+            }, {
+                onConflict: 'wallet_address,date',
             });
-            setShowForm(false);
-            fetchMetrics();
+
+            if (!error) {
+                setFormData({
+                    date: formatDateForInput(),
+                    total_assets: '',
+                    cash: '',
+                    exchangeRate: formData.exchangeRate,
+                    notes: '',
+                });
+                setShowForm(false);
+                fetchMetrics();
+            }
+        } catch (error) {
+            console.error('Error saving net worth:', error);
         }
+
         setSaving(false);
     };
 
@@ -84,14 +114,18 @@ export default function NetWorthPage() {
         .reverse()
         .map((m) => ({
             date: m.date,
-            assets: Number(m.total_assets) || 0,
-            cash: Number(m.cash) || 0,
+            assets: Number(m.total_assets_try || m.total_assets) || 0,
+            cash: Number(m.cash_try || m.cash) || 0,
         }));
 
     // Calculate change
-    const latestAssets = metrics[0]?.total_assets ? Number(metrics[0].total_assets) : 0;
-    const previousAssets = metrics[1]?.total_assets ? Number(metrics[1].total_assets) : 0;
-    const assetChange = previousAssets ? ((latestAssets - previousAssets) / previousAssets) * 100 : 0;
+    const latestAssetsTRY = metrics[0]?.total_assets_try ?? metrics[0]?.total_assets ?? 0;
+    const previousAssetsTRY = metrics[1]?.total_assets_try ?? metrics[1]?.total_assets ?? 0;
+    const assetChange = previousAssetsTRY ? ((Number(latestAssetsTRY) - Number(previousAssetsTRY)) / Number(previousAssetsTRY)) * 100 : 0;
+
+    const latestAssetsUSD = metrics[0]?.total_assets_usd ?? 0;
+    const latestCashTRY = metrics[0]?.cash_try ?? metrics[0]?.cash ?? 0;
+    const latestCashUSD = metrics[0]?.cash_usd ?? 0;
 
     if (loading) {
         return (
@@ -125,7 +159,7 @@ export default function NetWorthPage() {
                 <div className="glass-dark rounded-2xl p-6 slide-in">
                     <h3 className="text-lg font-semibold mb-4">New Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid md:grid-cols-3 gap-4">
+                        <div className="grid md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
@@ -136,37 +170,74 @@ export default function NetWorthPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Total Assets ($)</label>
+                                <label className="block text-sm text-slate-400 mb-2">Notes</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={formData.total_assets}
-                                    onChange={(e) => setFormData({ ...formData, total_assets: e.target.value })}
-                                    placeholder="100000"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Cash ($)</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={formData.cash}
-                                    onChange={(e) => setFormData({ ...formData, cash: e.target.value })}
-                                    placeholder="25000"
+                                    type="text"
+                                    value={formData.notes}
+                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                    placeholder="Additional information..."
                                 />
                             </div>
                         </div>
-                        <div>
-                            <label className="block text-sm text-slate-400 mb-2">Notes</label>
-                            <textarea
-                                value={formData.notes}
-                                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                placeholder="Additional information..."
-                                rows={2}
-                            />
+
+                        {/* Currency inputs */}
+                        <div className="glass rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <RefreshCw className="w-4 h-4 text-primary-400" />
+                                <span className="text-sm font-medium text-slate-300">Currency Conversion</span>
+                            </div>
+
+                            {/* Exchange Rate */}
+                            <div className="mb-4">
+                                <label className="block text-sm text-slate-400 mb-2">USD/TRY Rate</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    value={formData.exchangeRate}
+                                    onChange={(e) => setFormData({ ...formData, exchangeRate: e.target.value })}
+                                    placeholder={DEFAULT_USD_TRY_RATE.toString()}
+                                    required
+                                    className="max-w-xs"
+                                />
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                {/* Total Assets */}
+                                <div className="glass rounded-lg p-3">
+                                    <label className="block text-sm text-slate-400 mb-2">Total Assets (₺ TRY)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={formData.total_assets}
+                                        onChange={(e) => setFormData({ ...formData, total_assets: e.target.value })}
+                                        placeholder="1000000"
+                                        className="text-lg font-medium"
+                                    />
+                                    <div className="mt-2 text-sm text-slate-500">
+                                        {usdPreview.assets > 0 ? `≈ $${usdPreview.assets.toLocaleString()}` : '-'}
+                                    </div>
+                                </div>
+
+                                {/* Cash */}
+                                <div className="glass rounded-lg p-3">
+                                    <label className="block text-sm text-slate-400 mb-2">Cash (₺ TRY)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={formData.cash}
+                                        onChange={(e) => setFormData({ ...formData, cash: e.target.value })}
+                                        placeholder="250000"
+                                    />
+                                    <div className="mt-2 text-sm text-slate-500">
+                                        {usdPreview.cash > 0 ? `≈ $${usdPreview.cash.toLocaleString()}` : '-'}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+
                         <div className="flex justify-end gap-3">
                             <button
                                 type="button"
@@ -205,8 +276,11 @@ export default function NetWorthPage() {
                                 )}
                             </div>
                         </div>
-                        <p className="text-4xl font-bold">
-                            {formatCurrency(latestAssets)}
+                        <p className="text-3xl font-bold">
+                            {formatTRY(Number(latestAssetsTRY))}
+                        </p>
+                        <p className="text-sm text-slate-500 mt-1">
+                            {formatUSDSecondary(Number(latestAssetsUSD))}
                         </p>
                     </div>
 
@@ -217,8 +291,11 @@ export default function NetWorthPage() {
                             </div>
                             <span className="text-slate-400 text-sm">Cash</span>
                         </div>
-                        <p className="text-4xl font-bold">
-                            {formatCurrency(metrics[0]?.cash ? Number(metrics[0].cash) : 0)}
+                        <p className="text-3xl font-bold">
+                            {formatTRY(Number(latestCashTRY))}
+                        </p>
+                        <p className="text-sm text-slate-500 mt-1">
+                            {formatUSDSecondary(Number(latestCashUSD))}
                         </p>
                     </div>
                 </div>
@@ -227,7 +304,7 @@ export default function NetWorthPage() {
             {/* Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Asset Trend</h3>
+                    <h3 className="text-lg font-semibold mb-4">Asset Trend (₺)</h3>
                     <TimeSeriesChart
                         data={chartData}
                         lines={[
@@ -254,6 +331,7 @@ export default function NetWorthPage() {
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Total Assets</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Cash</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Rate</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Notes</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
@@ -262,11 +340,32 @@ export default function NetWorthPage() {
                                 {metrics.map((metric) => (
                                     <tr key={metric.id} className="border-b border-slate-700/30 hover:bg-slate-700/20">
                                         <td className="px-4 py-3 text-sm">{formatDate(metric.date)}</td>
-                                        <td className="px-4 py-3 text-sm font-medium">
-                                            {formatCurrency(Number(metric.total_assets) || 0)}
+                                        <td className="px-4 py-3 text-sm">
+                                            <div>
+                                                <span className="font-medium">
+                                                    {formatTRY(Number(metric.total_assets_try || metric.total_assets) || 0)}
+                                                </span>
+                                                {metric.total_assets_usd && (
+                                                    <span className="text-slate-500 text-xs ml-2">
+                                                        {formatUSDSecondary(metric.total_assets_usd)}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3 text-sm">
-                                            {formatCurrency(Number(metric.cash) || 0)}
+                                            <div>
+                                                <span>
+                                                    {formatTRY(Number(metric.cash_try || metric.cash) || 0)}
+                                                </span>
+                                                {metric.cash_usd && (
+                                                    <span className="text-slate-500 text-xs ml-2">
+                                                        {formatUSDSecondary(metric.cash_usd)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-slate-400">
+                                            {metric.exchange_rate_usd_try ? `${metric.exchange_rate_usd_try.toFixed(2)}` : '-'}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-slate-400 max-w-xs truncate">
                                             {metric.notes || '-'}

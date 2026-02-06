@@ -63,10 +63,18 @@ export interface NetWorth {
     id: string;
     wallet_address: string;
     date: string;
-    total_assets: number | null;
-    cash: number | null;
+    // Currency fields (TRY primary)
+    total_assets_try: number | null;
+    total_assets_usd: number | null;
+    cash_try: number | null;
+    cash_usd: number | null;
+    exchange_rate_usd_try: number | null;
+    exchange_rate_date: string | null;
     notes: string | null;
     created_at: string;
+    // Legacy fields
+    total_assets: number | null;
+    cash: number | null;
 }
 
 export interface Income {
@@ -106,10 +114,18 @@ export interface Investment {
     wallet_address: string;
     date: string;
     investment_type: string;
-    amount: number;
-    profit_loss: number | null;
+    // Currency fields (TRY primary)
+    amount_try: number;
+    amount_usd: number;
+    profit_loss_try: number | null;
+    profit_loss_usd: number | null;
+    exchange_rate_usd_try: number;
+    exchange_rate_date: string;
     notes: string | null;
     created_at: string;
+    // Legacy fields
+    amount: number;
+    profit_loss: number | null;
 }
 
 // Form input types (for creating/updating)

@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
 import { Income } from '@/types/database';
 import { formatDate, formatDateForInput } from '@/lib/utils';
-import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@/lib/currency';
+import { convertTRYtoUSD, formatTRY, formatUSDSecondary, DEFAULT_USD_TRY_RATE } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
-import { Plus, Trash2, TrendingUp, Briefcase, Gift, Loader2 } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, Briefcase, Gift, Loader2, RefreshCw } from 'lucide-react';
 
 export default function IncomePage() {
     const { session } = useWallet();
@@ -20,8 +20,16 @@ export default function IncomePage() {
         date: formatDateForInput(),
         category: 'regular' as 'regular' | 'additional',
         amount: '',
+        exchangeRate: DEFAULT_USD_TRY_RATE.toString(),
         description: '',
     });
+
+    // Real-time USD preview
+    const usdPreview = useMemo(() => {
+        const amountTry = parseFloat(formData.amount) || 0;
+        const rate = parseFloat(formData.exchangeRate) || DEFAULT_USD_TRY_RATE;
+        return convertTRYtoUSD(amountTry, rate);
+    }, [formData.amount, formData.exchangeRate]);
 
     const fetchRecords = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -51,10 +59,9 @@ export default function IncomePage() {
         setSaving(true);
 
         try {
-            // Get current exchange rate
-            const rateData = await getUSDTRYRate();
             const amountTry = parseFloat(formData.amount);
-            const amountUsd = convertTRYtoUSD(amountTry, rateData.rate);
+            const rate = parseFloat(formData.exchangeRate) || DEFAULT_USD_TRY_RATE;
+            const amountUsd = convertTRYtoUSD(amountTry, rate);
 
             const supabase = createClient();
             const { error } = await supabase.from('income').insert({
@@ -63,10 +70,9 @@ export default function IncomePage() {
                 category: formData.category,
                 amount_try: amountTry,
                 amount_usd: amountUsd,
-                exchange_rate_usd_try: rateData.rate,
-                exchange_rate_date: rateData.date,
+                exchange_rate_usd_try: rate,
+                exchange_rate_date: new Date().toISOString().split('T')[0],
                 description: formData.description || null,
-                // Legacy field
                 amount: amountTry,
             });
 
@@ -75,6 +81,7 @@ export default function IncomePage() {
                     date: formatDateForInput(),
                     category: 'regular',
                     amount: '',
+                    exchangeRate: formData.exchangeRate, // Keep the rate for next entry
                     description: '',
                 });
                 setShowForm(false);
@@ -162,7 +169,7 @@ export default function IncomePage() {
                 <div className="glass-dark rounded-2xl p-6 slide-in">
                     <h3 className="text-lg font-semibold mb-4">New Income Entry</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
@@ -184,18 +191,6 @@ export default function IncomePage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Amount (₺)</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={formData.amount}
-                                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                    placeholder="25000"
-                                    required
-                                />
-                            </div>
-                            <div>
                                 <label className="block text-sm text-slate-400 mb-2">Description</label>
                                 <input
                                     type="text"
@@ -205,6 +200,48 @@ export default function IncomePage() {
                                 />
                             </div>
                         </div>
+
+                        {/* Currency inputs with exchange rate */}
+                        <div className="glass rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <RefreshCw className="w-4 h-4 text-primary-400" />
+                                <span className="text-sm font-medium text-slate-300">Currency Conversion</span>
+                            </div>
+                            <div className="grid md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-2">Amount (₺ TRY)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={formData.amount}
+                                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                                        placeholder="25000"
+                                        required
+                                        className="text-lg font-medium"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-2">USD/TRY Rate</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0.01"
+                                        value={formData.exchangeRate}
+                                        onChange={(e) => setFormData({ ...formData, exchangeRate: e.target.value })}
+                                        placeholder={DEFAULT_USD_TRY_RATE.toString()}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-2">USD Equivalent</label>
+                                    <div className="w-full px-4 py-3 rounded-xl bg-slate-700/50 text-slate-300 font-medium">
+                                        {usdPreview > 0 ? `≈ $${usdPreview.toLocaleString()}` : '-'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="flex justify-end gap-3">
                             <button
                                 type="button"
@@ -304,6 +341,7 @@ export default function IncomePage() {
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Category</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Amount</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Rate</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Description</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
@@ -333,6 +371,9 @@ export default function IncomePage() {
                                                     </span>
                                                 )}
                                             </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-slate-400">
+                                            {record.exchange_rate_usd_try ? `${record.exchange_rate_usd_try.toFixed(2)}` : '-'}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-slate-400 max-w-xs truncate">
                                             {record.description || '-'}
