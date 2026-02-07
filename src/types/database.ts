@@ -134,6 +134,10 @@ export interface Investment {
     exchange_rate_usd_try: number;
     exchange_rate_date: string;
     created_at: string;
+    // Legacy fields (for backwards compatibility)
+    amount?: number;
+    amount_try?: number;
+    amount_usd?: number;
 }
 
 // Form input types (for creating/updating)
