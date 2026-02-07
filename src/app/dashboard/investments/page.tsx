@@ -32,6 +32,7 @@ export default function InvestmentsPage() {
     // Claim modal state
     const [claimingId, setClaimingId] = useState<string | null>(null);
     const [claimAmount, setClaimAmount] = useState('');
+    const [error, setError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
         date: formatDateForInput(),
@@ -65,13 +66,14 @@ export default function InvestmentsPage() {
         if (!session?.walletAddress) return;
 
         setSaving(true);
+        setError(null);
 
         try {
             const rateData = await getUSDTRYRate();
             const investedTry = parseFloat(formData.amount);
 
             const supabase = createClient();
-            const { error } = await supabase.from('investments').insert({
+            const { data, error: insertError } = await supabase.from('investments').insert({
                 wallet_address: session.walletAddress.toLowerCase(),
                 date: formData.date,
                 investment_type: formData.investment_type,
@@ -80,9 +82,18 @@ export default function InvestmentsPage() {
                 status: 'active',
                 exchange_rate_usd_try: rateData.rate,
                 exchange_rate_date: rateData.timestamp.split('T')[0],
-            });
+                // Backwards compatibility for old schema
+                amount: investedTry,
+                amount_try: investedTry,
+                amount_usd: convertTRYtoUSD(investedTry, rateData.rate),
+            }).select();
 
-            if (!error) {
+            console.log('Insert result:', { data, error: insertError });
+
+            if (insertError) {
+                console.error('Supabase error:', insertError);
+                setError(`Failed to save: ${insertError.message}`);
+            } else {
                 setFormData({
                     date: formatDateForInput(),
                     investment_type: 'Crypto',
@@ -93,6 +104,7 @@ export default function InvestmentsPage() {
             }
         } catch (error) {
             console.error('Error saving investment:', error);
+            setError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
 
         setSaving(false);
@@ -247,6 +259,11 @@ export default function InvestmentsPage() {
                                 />
                             </div>
                         </div>
+                        {error && (
+                            <div className="p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">
+                                {error}
+                            </div>
+                        )}
                         <p className="text-xs text-slate-500">
                             💡 Investment will be marked as &quot;Locked Capital&quot; until you claim it with realized profit/loss.
                         </p>
@@ -425,8 +442,8 @@ export default function InvestmentsPage() {
                     <button
                         onClick={() => setActiveTab('active')}
                         className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'active'
-                                ? 'bg-amber-500/20 text-amber-400'
-                                : 'text-slate-400 hover:text-slate-200'
+                            ? 'bg-amber-500/20 text-amber-400'
+                            : 'text-slate-400 hover:text-slate-200'
                             }`}
                     >
                         <Lock className="w-4 h-4 inline mr-2" />
@@ -435,8 +452,8 @@ export default function InvestmentsPage() {
                     <button
                         onClick={() => setActiveTab('claimed')}
                         className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'claimed'
-                                ? 'bg-emerald-500/20 text-emerald-400'
-                                : 'text-slate-400 hover:text-slate-200'
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'text-slate-400 hover:text-slate-200'
                             }`}
                     >
                         <CheckCircle className="w-4 h-4 inline mr-2" />
