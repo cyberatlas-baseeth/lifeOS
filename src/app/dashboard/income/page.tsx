@@ -8,7 +8,7 @@ import { formatDate, formatDateForInput } from '@/lib/utils';
 import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import LiveExchangeRate from '@/components/ui/LiveExchangeRate';
-import { Plus, Trash2, TrendingUp, Briefcase, Gift, Loader2 } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, Briefcase, Gift, Loader2, Pencil, X } from 'lucide-react';
 
 // Tag options for each category
 const REGULAR_INCOME_TAGS = ['salary'];
@@ -20,6 +20,8 @@ export default function IncomePage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
         date: formatDateForInput(),
@@ -27,6 +29,17 @@ export default function IncomePage() {
         tag: 'salary',
         amount: '',
     });
+
+    const resetForm = () => {
+        setFormData({
+            date: formatDateForInput(),
+            category: 'regular',
+            tag: 'salary',
+            amount: '',
+        });
+        setEditingId(null);
+        setError(null);
+    };
 
     // Update tag when category changes
     const handleCategoryChange = (category: 'regular' | 'additional') => {
@@ -46,7 +59,7 @@ export default function IncomePage() {
             .select('*')
             .eq('wallet_address', session.walletAddress.toLowerCase())
             .order('date', { ascending: false })
-            .limit(50);
+            .limit(100);
 
         if (!error && data) {
             setRecords(data);
@@ -58,20 +71,33 @@ export default function IncomePage() {
         fetchRecords();
     }, [fetchRecords]);
 
+    const handleEdit = (record: Income) => {
+        setFormData({
+            date: record.date,
+            category: record.category,
+            tag: record.tag || (record.category === 'regular' ? 'salary' : 'crypto'),
+            amount: String(record.amount_try || record.amount || ''),
+        });
+        setEditingId(record.id);
+        setShowForm(true);
+        setError(null);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!session?.walletAddress) return;
 
         setSaving(true);
+        setError(null);
 
         try {
-            // Auto-fetch current exchange rate
             const rateData = await getUSDTRYRate();
             const amountTry = parseFloat(formData.amount);
             const amountUsd = convertTRYtoUSD(amountTry, rateData.rate);
 
             const supabase = createClient();
-            const { error } = await supabase.from('income').insert({
+
+            const recordData = {
                 wallet_address: session.walletAddress.toLowerCase(),
                 date: formData.date,
                 category: formData.category,
@@ -81,20 +107,37 @@ export default function IncomePage() {
                 exchange_rate_usd_try: rateData.rate,
                 exchange_rate_date: rateData.timestamp.split('T')[0],
                 amount: amountTry,
-            });
+            };
 
-            if (!error) {
-                setFormData({
-                    date: formatDateForInput(),
-                    category: 'regular',
-                    tag: 'salary',
-                    amount: '',
-                });
+            let result;
+            if (editingId) {
+                // Update existing record
+                result = await supabase
+                    .from('income')
+                    .update(recordData)
+                    .eq('id', editingId)
+                    .select();
+            } else {
+                // Insert new record
+                result = await supabase
+                    .from('income')
+                    .insert(recordData)
+                    .select();
+            }
+
+            console.log('Save result:', result);
+
+            if (result.error) {
+                console.error('Supabase error:', result.error);
+                setError(`Failed to save: ${result.error.message}`);
+            } else {
+                resetForm();
                 setShowForm(false);
                 fetchRecords();
             }
         } catch (error) {
             console.error('Error saving income:', error);
+            setError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
 
         setSaving(false);
@@ -104,6 +147,11 @@ export default function IncomePage() {
         const supabase = createClient();
         await supabase.from('income').delete().eq('id', id);
         fetchRecords();
+    };
+
+    const handleCancel = () => {
+        resetForm();
+        setShowForm(false);
     };
 
     // Get available tags based on category
@@ -167,7 +215,10 @@ export default function IncomePage() {
                 <div className="flex items-center gap-3">
                     <LiveExchangeRate />
                     <button
-                        onClick={() => setShowForm(!showForm)}
+                        onClick={() => {
+                            resetForm();
+                            setShowForm(!showForm);
+                        }}
                         className="btn btn-primary"
                     >
                         <Plus className="w-4 h-4" />
@@ -179,7 +230,17 @@ export default function IncomePage() {
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">New Income Entry</h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">
+                            {editingId ? 'Edit Income' : 'New Income Entry'}
+                        </h3>
+                        <button
+                            onClick={handleCancel}
+                            className="p-2 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div>
@@ -203,7 +264,7 @@ export default function IncomePage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Tag *</label>
+                                <label className="block text-sm text-slate-400 mb-2">Tag</label>
                                 <select
                                     value={formData.tag}
                                     onChange={(e) => setFormData({ ...formData, tag: e.target.value })}
@@ -229,10 +290,15 @@ export default function IncomePage() {
                                 />
                             </div>
                         </div>
+                        {error && (
+                            <div className="p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">
+                                {error}
+                            </div>
+                        )}
                         <div className="flex justify-end gap-3">
                             <button
                                 type="button"
-                                onClick={() => setShowForm(false)}
+                                onClick={handleCancel}
                                 className="btn btn-secondary"
                             >
                                 Cancel
@@ -242,7 +308,7 @@ export default function IncomePage() {
                                 disabled={saving}
                                 className="btn btn-primary"
                             >
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingId ? 'Update' : 'Save')}
                             </button>
                         </div>
                     </form>
@@ -318,7 +384,7 @@ export default function IncomePage() {
                 <h3 className="text-lg font-semibold mb-4">Recent Entries</h3>
                 {records.length === 0 ? (
                     <p className="text-slate-500 text-center py-8">
-                        No income records yet. Click the button above to add one.
+                        No income records yet. Click &quot;Add Income&quot; to start tracking.
                     </p>
                 ) : (
                     <div className="overflow-x-auto">
@@ -368,12 +434,22 @@ export default function IncomePage() {
                                             {record.exchange_rate_usd_try ? `${record.exchange_rate_usd_try.toFixed(2)}` : '-'}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <button
-                                                onClick={() => handleDelete(record.id)}
-                                                className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    onClick={() => handleEdit(record)}
+                                                    className="p-2 rounded-lg hover:bg-blue-500/20 text-slate-500 hover:text-blue-400 transition-colors"
+                                                    title="Edit"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(record.id)}
+                                                    className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

@@ -8,7 +8,7 @@ import { formatDate, formatDateForInput } from '@/lib/utils';
 import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import LiveExchangeRate from '@/components/ui/LiveExchangeRate';
-import { Plus, Trash2, TrendingDown, Home, Zap, ShoppingBag, Loader2 } from 'lucide-react';
+import { Plus, Trash2, TrendingDown, Home, Zap, ShoppingBag, Loader2, Pencil, X } from 'lucide-react';
 
 // Tag configuration with labels and colors
 const EXPENSE_TAGS: { value: ExpenseTag; label: string; icon: typeof Home; color: string; bgColor: string }[] = [
@@ -23,6 +23,7 @@ export default function ExpensesPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
@@ -30,6 +31,16 @@ export default function ExpensesPage() {
         tag: 'lifestyle' as ExpenseTag,
         amount: '',
     });
+
+    const resetForm = () => {
+        setFormData({
+            date: formatDateForInput(),
+            tag: 'lifestyle',
+            amount: '',
+        });
+        setEditingId(null);
+        setError(null);
+    };
 
     const fetchRecords = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -52,6 +63,18 @@ export default function ExpensesPage() {
         fetchRecords();
     }, [fetchRecords]);
 
+    const handleEdit = (record: Expense) => {
+        const tag = getRecordTag(record);
+        setFormData({
+            date: record.date,
+            tag: tag,
+            amount: String(record.amount_try || record.amount || ''),
+        });
+        setEditingId(record.id);
+        setShowForm(true);
+        setError(null);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!session?.walletAddress) return;
@@ -65,7 +88,8 @@ export default function ExpensesPage() {
             const amountUsd = convertTRYtoUSD(amountTry, rateData.rate);
 
             const supabase = createClient();
-            const { data, error: insertError } = await supabase.from('expenses').insert({
+
+            const recordData = {
                 wallet_address: session.walletAddress.toLowerCase(),
                 date: formData.date,
                 tag: formData.tag,
@@ -76,19 +100,31 @@ export default function ExpensesPage() {
                 // Backwards compatibility
                 amount: amountTry,
                 category: formData.tag === 'rent' ? 'fixed' : 'variable',
-            }).select();
+            };
 
-            console.log('Insert result:', { data, error: insertError });
-
-            if (insertError) {
-                console.error('Supabase error:', insertError);
-                setError(`Failed to save: ${insertError.message}`);
+            let result;
+            if (editingId) {
+                // Update existing record
+                result = await supabase
+                    .from('expenses')
+                    .update(recordData)
+                    .eq('id', editingId)
+                    .select();
             } else {
-                setFormData({
-                    date: formatDateForInput(),
-                    tag: 'lifestyle',
-                    amount: '',
-                });
+                // Insert new record
+                result = await supabase
+                    .from('expenses')
+                    .insert(recordData)
+                    .select();
+            }
+
+            console.log('Save result:', result);
+
+            if (result.error) {
+                console.error('Supabase error:', result.error);
+                setError(`Failed to save: ${result.error.message}`);
+            } else {
+                resetForm();
                 setShowForm(false);
                 fetchRecords();
             }
@@ -104,6 +140,11 @@ export default function ExpensesPage() {
         const supabase = createClient();
         await supabase.from('expenses').delete().eq('id', id);
         fetchRecords();
+    };
+
+    const handleCancel = () => {
+        resetForm();
+        setShowForm(false);
     };
 
     // Get tag for a record (with fallback for old data)
@@ -181,7 +222,10 @@ export default function ExpensesPage() {
                 <div className="flex items-center gap-3">
                     <LiveExchangeRate />
                     <button
-                        onClick={() => setShowForm(!showForm)}
+                        onClick={() => {
+                            resetForm();
+                            setShowForm(!showForm);
+                        }}
                         className="btn btn-primary"
                     >
                         <Plus className="w-4 h-4" />
@@ -193,7 +237,17 @@ export default function ExpensesPage() {
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">New Expense</h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">
+                            {editingId ? 'Edit Expense' : 'New Expense'}
+                        </h3>
+                        <button
+                            onClick={handleCancel}
+                            className="p-2 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid md:grid-cols-3 gap-4">
                             <div>
@@ -238,7 +292,7 @@ export default function ExpensesPage() {
                         <div className="flex justify-end gap-3">
                             <button
                                 type="button"
-                                onClick={() => setShowForm(false)}
+                                onClick={handleCancel}
                                 className="btn btn-secondary"
                             >
                                 Cancel
@@ -248,7 +302,7 @@ export default function ExpensesPage() {
                                 disabled={saving}
                                 className="btn btn-primary"
                             >
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingId ? 'Update' : 'Save')}
                             </button>
                         </div>
                     </form>
@@ -367,12 +421,22 @@ export default function ExpensesPage() {
                                                 {record.exchange_rate_usd_try ? `${record.exchange_rate_usd_try.toFixed(2)}` : '-'}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <button
-                                                    onClick={() => handleDelete(record.id)}
-                                                    className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        onClick={() => handleEdit(record)}
+                                                        className="p-2 rounded-lg hover:bg-blue-500/20 text-slate-500 hover:text-blue-400 transition-colors"
+                                                        title="Edit"
+                                                    >
+                                                        <Pencil className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(record.id)}
+                                                        className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );

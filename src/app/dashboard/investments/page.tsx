@@ -8,7 +8,7 @@ import { formatDate, formatDateForInput } from '@/lib/utils';
 import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import LiveExchangeRate from '@/components/ui/LiveExchangeRate';
-import { Plus, Trash2, PiggyBank, TrendingUp, TrendingDown, Loader2, Lock, CheckCircle, X } from 'lucide-react';
+import { Plus, Trash2, PiggyBank, TrendingUp, TrendingDown, Loader2, Lock, CheckCircle, X, Pencil } from 'lucide-react';
 
 const INVESTMENT_TYPES = [
     'Crypto',
@@ -27,6 +27,7 @@ export default function InvestmentsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'active' | 'claimed'>('active');
 
     // Claim modal state
@@ -39,6 +40,16 @@ export default function InvestmentsPage() {
         investment_type: 'Crypto',
         amount: '',
     });
+
+    const resetForm = () => {
+        setFormData({
+            date: formatDateForInput(),
+            investment_type: 'Crypto',
+            amount: '',
+        });
+        setEditingId(null);
+        setError(null);
+    };
 
     const fetchRecords = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -61,6 +72,17 @@ export default function InvestmentsPage() {
         fetchRecords();
     }, [fetchRecords]);
 
+    const handleEdit = (record: Investment) => {
+        setFormData({
+            date: record.date,
+            investment_type: record.investment_type,
+            amount: String(record.invested_try || record.amount || ''),
+        });
+        setEditingId(record.id);
+        setShowForm(true);
+        setError(null);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!session?.walletAddress) return;
@@ -73,7 +95,8 @@ export default function InvestmentsPage() {
             const investedTry = parseFloat(formData.amount);
 
             const supabase = createClient();
-            const { data, error: insertError } = await supabase.from('investments').insert({
+
+            const recordData = {
                 wallet_address: session.walletAddress.toLowerCase(),
                 date: formData.date,
                 investment_type: formData.investment_type,
@@ -86,19 +109,31 @@ export default function InvestmentsPage() {
                 amount: investedTry,
                 amount_try: investedTry,
                 amount_usd: convertTRYtoUSD(investedTry, rateData.rate),
-            }).select();
+            };
 
-            console.log('Insert result:', { data, error: insertError });
-
-            if (insertError) {
-                console.error('Supabase error:', insertError);
-                setError(`Failed to save: ${insertError.message}`);
+            let result;
+            if (editingId) {
+                // Update existing record (only for active investments)
+                result = await supabase
+                    .from('investments')
+                    .update(recordData)
+                    .eq('id', editingId)
+                    .select();
             } else {
-                setFormData({
-                    date: formatDateForInput(),
-                    investment_type: 'Crypto',
-                    amount: '',
-                });
+                // Insert new record
+                result = await supabase
+                    .from('investments')
+                    .insert(recordData)
+                    .select();
+            }
+
+            console.log('Save result:', result);
+
+            if (result.error) {
+                console.error('Supabase error:', result.error);
+                setError(`Failed to save: ${result.error.message}`);
+            } else {
+                resetForm();
                 setShowForm(false);
                 fetchRecords();
             }
@@ -146,6 +181,11 @@ export default function InvestmentsPage() {
         const supabase = createClient();
         await supabase.from('investments').delete().eq('id', id);
         fetchRecords();
+    };
+
+    const handleCancel = () => {
+        resetForm();
+        setShowForm(false);
     };
 
     // Filter records by status
@@ -211,7 +251,10 @@ export default function InvestmentsPage() {
                 <div className="flex items-center gap-3">
                     <LiveExchangeRate />
                     <button
-                        onClick={() => setShowForm(!showForm)}
+                        onClick={() => {
+                            resetForm();
+                            setShowForm(!showForm);
+                        }}
                         className="btn btn-primary"
                     >
                         <Plus className="w-4 h-4" />
@@ -223,7 +266,17 @@ export default function InvestmentsPage() {
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">New Investment</h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">
+                            {editingId ? 'Edit Investment' : 'New Investment'}
+                        </h3>
+                        <button
+                            onClick={handleCancel}
+                            className="p-2 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid md:grid-cols-3 gap-4">
                             <div>
@@ -270,7 +323,7 @@ export default function InvestmentsPage() {
                         <div className="flex justify-end gap-3">
                             <button
                                 type="button"
-                                onClick={() => setShowForm(false)}
+                                onClick={handleCancel}
                                 className="btn btn-secondary"
                             >
                                 Cancel
@@ -280,7 +333,7 @@ export default function InvestmentsPage() {
                                 disabled={saving}
                                 className="btn btn-primary"
                             >
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingId ? 'Update' : 'Save')}
                             </button>
                         </div>
                     </form>
@@ -520,8 +573,16 @@ export default function InvestmentsPage() {
                                                             Claim
                                                         </button>
                                                         <button
+                                                            onClick={() => handleEdit(record)}
+                                                            className="p-2 rounded-lg hover:bg-blue-500/20 text-slate-500 hover:text-blue-400 transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Pencil className="w-4 h-4" />
+                                                        </button>
+                                                        <button
                                                             onClick={() => handleDelete(record.id)}
                                                             className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                                            title="Delete"
                                                         >
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
@@ -584,6 +645,7 @@ export default function InvestmentsPage() {
                                                         <button
                                                             onClick={() => handleDelete(record.id)}
                                                             className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                                            title="Delete"
                                                         >
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
