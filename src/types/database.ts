@@ -109,23 +109,27 @@ export interface Expense {
     amount: number;
 }
 
+// Investment status type
+export type InvestmentStatus = 'active' | 'claimed';
+
 export interface Investment {
     id: string;
     wallet_address: string;
     date: string;
     investment_type: string;
-    // Currency fields (TRY primary)
-    amount_try: number;
-    amount_usd: number;
-    profit_loss_try: number | null;
-    profit_loss_usd: number | null;
+    // Primary investment amount (locked capital)
+    invested_try: number;
+    invested_usd: number;
+    // Lifecycle status
+    status: InvestmentStatus;
+    // Only populated when claimed
+    realized_pl_try: number | null;
+    realized_pl_usd: number | null;
+    claimed_at: string | null;
+    // Exchange rate at creation
     exchange_rate_usd_try: number;
     exchange_rate_date: string;
-    notes: string | null;
     created_at: string;
-    // Legacy fields
-    amount: number;
-    profit_loss: number | null;
 }
 
 // Form input types (for creating/updating)

@@ -1,6 +1,10 @@
 // Net Worth Calculator
 // Derives Net Worth from Income, Expenses, and Investments
 // All calculations are TRY-based, USD is for display only
+// 
+// Investment Logic (Claim-Based):
+// - Active investments: SUBTRACT invested_try (locked capital outflow)
+// - Claimed investments: ADD invested_try + realized_pl_try (capital + realized P/L)
 
 import { createClient } from '@/lib/supabase/client';
 
@@ -12,8 +16,11 @@ export interface NetWorthSnapshot {
     income_usd: number;
     expenses_try: number;
     expenses_usd: number;
-    investments_try: number;
-    investments_usd: number;
+    // Investment breakdown
+    active_investments_try: number;
+    active_investments_usd: number;
+    claimed_investments_try: number;
+    claimed_investments_usd: number;
 }
 
 export interface NetWorthSummary {
@@ -25,13 +32,30 @@ export interface NetWorthSummary {
     total_income_usd: number;
     total_expenses_try: number;
     total_expenses_usd: number;
-    total_investments_try: number;
-    total_investments_usd: number;
+    // Investment summary
+    locked_capital_try: number;
+    locked_capital_usd: number;
+    realized_returns_try: number;
+    realized_returns_usd: number;
+}
+
+interface InvestmentRecord {
+    date: string;
+    invested_try: number;
+    invested_usd: number;
+    status: 'active' | 'claimed';
+    realized_pl_try: number | null;
+    realized_pl_usd: number | null;
+    claimed_at: string | null;
 }
 
 /**
  * Calculate Net Worth from all financial sources
- * Net Worth = Total Income - Total Expenses + Total Investments
+ * 
+ * Net Worth = Total Income 
+ *           - Total Expenses 
+ *           - Sum(Active Investments.invested_try)
+ *           + Sum(Claimed Investments.invested_try + realized_pl_try)
  */
 export async function calculateNetWorth(walletAddress: string): Promise<{
     summary: NetWorthSummary;
@@ -54,38 +78,66 @@ export async function calculateNetWorth(walletAddress: string): Promise<{
         .eq('wallet_address', wallet)
         .order('date', { ascending: true });
 
-    // Fetch all investment records
+    // Fetch all investment records with new schema
     const { data: investmentData } = await supabase
         .from('investments')
-        .select('date, amount_try, amount_usd, amount, profit_loss_try, profit_loss_usd, profit_loss')
+        .select('date, invested_try, invested_usd, status, realized_pl_try, realized_pl_usd, claimed_at')
         .eq('wallet_address', wallet)
         .order('date', { ascending: true });
 
-    // Calculate totals
+    // Type assertion for investment data
+    const investments: InvestmentRecord[] = (investmentData || []).map(r => ({
+        date: r.date,
+        invested_try: Number(r.invested_try || 0),
+        invested_usd: Number(r.invested_usd || 0),
+        status: r.status || 'active',
+        realized_pl_try: r.realized_pl_try ? Number(r.realized_pl_try) : null,
+        realized_pl_usd: r.realized_pl_usd ? Number(r.realized_pl_usd) : null,
+        claimed_at: r.claimed_at || null,
+    }));
+
+    // Calculate income totals
     const totalIncomeTry = (incomeData || []).reduce((sum, r) =>
         sum + Number(r.amount_try || r.amount || 0), 0);
     const totalIncomeUsd = (incomeData || []).reduce((sum, r) =>
         sum + Number(r.amount_usd || 0), 0);
 
+    // Calculate expense totals
     const totalExpensesTry = (expenseData || []).reduce((sum, r) =>
         sum + Number(r.amount_try || r.amount || 0), 0);
     const totalExpensesUsd = (expenseData || []).reduce((sum, r) =>
         sum + Number(r.amount_usd || 0), 0);
 
-    const totalInvestmentsTry = (investmentData || []).reduce((sum, r) =>
-        sum + Number(r.amount_try || r.amount || 0) + Number(r.profit_loss_try || r.profit_loss || 0), 0);
-    const totalInvestmentsUsd = (investmentData || []).reduce((sum, r) =>
-        sum + Number(r.amount_usd || 0) + Number(r.profit_loss_usd || 0), 0);
+    // Calculate investment totals (separated by status)
+    const activeInvestments = investments.filter(i => i.status === 'active');
+    const claimedInvestments = investments.filter(i => i.status === 'claimed');
 
-    // Current Net Worth
-    const currentTry = totalIncomeTry - totalExpensesTry + totalInvestmentsTry;
-    const currentUsd = totalIncomeUsd - totalExpensesUsd + totalInvestmentsUsd;
+    // Locked capital (active investments - outflow)
+    const lockedCapitalTry = activeInvestments.reduce((sum, i) => sum + i.invested_try, 0);
+    const lockedCapitalUsd = activeInvestments.reduce((sum, i) => sum + i.invested_usd, 0);
+
+    // Realized returns (claimed investments - inflow: principal + P/L)
+    const realizedReturnsTry = claimedInvestments.reduce((sum, i) =>
+        sum + i.invested_try + (i.realized_pl_try || 0), 0);
+    const realizedReturnsUsd = claimedInvestments.reduce((sum, i) =>
+        sum + i.invested_usd + (i.realized_pl_usd || 0), 0);
+
+    // Current Net Worth = Income - Expenses - LockedCapital + RealizedReturns
+    const currentTry = totalIncomeTry - totalExpensesTry - lockedCapitalTry + realizedReturnsTry;
+    const currentUsd = totalIncomeUsd - totalExpensesUsd - lockedCapitalUsd + realizedReturnsUsd;
 
     // Generate time-series snapshots by date
     const allDates = new Set<string>();
     (incomeData || []).forEach(r => allDates.add(r.date));
     (expenseData || []).forEach(r => allDates.add(r.date));
-    (investmentData || []).forEach(r => allDates.add(r.date));
+    investments.forEach(r => {
+        allDates.add(r.date);
+        // Also add claim date for claimed investments
+        if (r.claimed_at) {
+            const claimDate = r.claimed_at.split('T')[0];
+            allDates.add(claimDate);
+        }
+    });
 
     const sortedDates = Array.from(allDates).sort();
 
@@ -95,8 +147,13 @@ export async function calculateNetWorth(walletAddress: string): Promise<{
     let cumulativeIncomeUsd = 0;
     let cumulativeExpensesTry = 0;
     let cumulativeExpensesUsd = 0;
-    let cumulativeInvestmentsTry = 0;
-    let cumulativeInvestmentsUsd = 0;
+    let cumulativeActiveInvTry = 0;
+    let cumulativeActiveInvUsd = 0;
+    let cumulativeClaimedInvTry = 0;
+    let cumulativeClaimedInvUsd = 0;
+
+    // Track which investments are active at each date
+    const investmentStatusByDate = new Map<string, { activeTry: number; activeUsd: number; claimedTry: number; claimedUsd: number }>();
 
     for (const date of sortedDates) {
         // Add income for this date
@@ -115,24 +172,42 @@ export async function calculateNetWorth(walletAddress: string): Promise<{
                 cumulativeExpensesUsd += Number(r.amount_usd || 0);
             });
 
-        // Add investments for this date
-        (investmentData || [])
+        // Process investments created on this date (initially active = capital outflow)
+        investments
             .filter(r => r.date === date)
             .forEach(r => {
-                cumulativeInvestmentsTry += Number(r.amount_try || r.amount || 0) + Number(r.profit_loss_try || r.profit_loss || 0);
-                cumulativeInvestmentsUsd += Number(r.amount_usd || 0) + Number(r.profit_loss_usd || 0);
+                cumulativeActiveInvTry += r.invested_try;
+                cumulativeActiveInvUsd += r.invested_usd;
             });
+
+        // Process investments claimed on this date (move from active to claimed)
+        investments
+            .filter(r => r.claimed_at && r.claimed_at.split('T')[0] === date)
+            .forEach(r => {
+                // Remove from active
+                cumulativeActiveInvTry -= r.invested_try;
+                cumulativeActiveInvUsd -= r.invested_usd;
+                // Add to claimed (principal + realized P/L)
+                cumulativeClaimedInvTry += r.invested_try + (r.realized_pl_try || 0);
+                cumulativeClaimedInvUsd += r.invested_usd + (r.realized_pl_usd || 0);
+            });
+
+        // Net Worth = Income - Expenses - ActiveInvestments + ClaimedInvestments
+        const totalTry = cumulativeIncomeTry - cumulativeExpensesTry - cumulativeActiveInvTry + cumulativeClaimedInvTry;
+        const totalUsd = cumulativeIncomeUsd - cumulativeExpensesUsd - cumulativeActiveInvUsd + cumulativeClaimedInvUsd;
 
         snapshots.push({
             date,
-            total_try: cumulativeIncomeTry - cumulativeExpensesTry + cumulativeInvestmentsTry,
-            total_usd: cumulativeIncomeUsd - cumulativeExpensesUsd + cumulativeInvestmentsUsd,
+            total_try: totalTry,
+            total_usd: totalUsd,
             income_try: cumulativeIncomeTry,
             income_usd: cumulativeIncomeUsd,
             expenses_try: cumulativeExpensesTry,
             expenses_usd: cumulativeExpensesUsd,
-            investments_try: cumulativeInvestmentsTry,
-            investments_usd: cumulativeInvestmentsUsd,
+            active_investments_try: cumulativeActiveInvTry,
+            active_investments_usd: cumulativeActiveInvUsd,
+            claimed_investments_try: cumulativeClaimedInvTry,
+            claimed_investments_usd: cumulativeClaimedInvUsd,
         });
     }
 
@@ -151,8 +226,10 @@ export async function calculateNetWorth(walletAddress: string): Promise<{
             total_income_usd: totalIncomeUsd,
             total_expenses_try: totalExpensesTry,
             total_expenses_usd: totalExpensesUsd,
-            total_investments_try: totalInvestmentsTry,
-            total_investments_usd: totalInvestmentsUsd,
+            locked_capital_try: lockedCapitalTry,
+            locked_capital_usd: lockedCapitalUsd,
+            realized_returns_try: realizedReturnsTry,
+            realized_returns_usd: realizedReturnsUsd,
         },
         snapshots,
     };

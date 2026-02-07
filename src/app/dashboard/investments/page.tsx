@@ -8,12 +8,12 @@ import { formatDate, formatDateForInput } from '@/lib/utils';
 import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import LiveExchangeRate from '@/components/ui/LiveExchangeRate';
-import { Plus, Trash2, PiggyBank, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { Plus, Trash2, PiggyBank, TrendingUp, TrendingDown, Loader2, Lock, CheckCircle, X } from 'lucide-react';
 
 const INVESTMENT_TYPES = [
-    'Stocks',
     'Crypto',
     'Gold',
+    'Stocks',
     'Forex',
     'Real Estate',
     'Funds',
@@ -27,13 +27,16 @@ export default function InvestmentsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    const [activeTab, setActiveTab] = useState<'active' | 'claimed'>('active');
+
+    // Claim modal state
+    const [claimingId, setClaimingId] = useState<string | null>(null);
+    const [claimAmount, setClaimAmount] = useState('');
 
     const [formData, setFormData] = useState({
         date: formatDateForInput(),
-        investment_type: 'Stocks',
+        investment_type: 'Crypto',
         amount: '',
-        profit_loss: '',
-        notes: '',
     });
 
     const fetchRecords = useCallback(async () => {
@@ -45,7 +48,7 @@ export default function InvestmentsPage() {
             .select('*')
             .eq('wallet_address', session.walletAddress.toLowerCase())
             .order('date', { ascending: false })
-            .limit(50);
+            .limit(100);
 
         if (!error && data) {
             setRecords(data);
@@ -64,34 +67,26 @@ export default function InvestmentsPage() {
         setSaving(true);
 
         try {
-            // Auto-fetch current exchange rate
             const rateData = await getUSDTRYRate();
-            const amountTry = parseFloat(formData.amount);
-            const profitLossTry = formData.profit_loss ? parseFloat(formData.profit_loss) : 0;
+            const investedTry = parseFloat(formData.amount);
 
             const supabase = createClient();
             const { error } = await supabase.from('investments').insert({
                 wallet_address: session.walletAddress.toLowerCase(),
                 date: formData.date,
                 investment_type: formData.investment_type,
-                amount_try: amountTry,
-                amount_usd: convertTRYtoUSD(amountTry, rateData.rate),
-                profit_loss_try: profitLossTry,
-                profit_loss_usd: convertTRYtoUSD(profitLossTry, rateData.rate),
+                invested_try: investedTry,
+                invested_usd: convertTRYtoUSD(investedTry, rateData.rate),
+                status: 'active',
                 exchange_rate_usd_try: rateData.rate,
                 exchange_rate_date: rateData.timestamp.split('T')[0],
-                notes: formData.notes || null,
-                amount: amountTry,
-                profit_loss: profitLossTry,
             });
 
             if (!error) {
                 setFormData({
                     date: formatDateForInput(),
-                    investment_type: 'Stocks',
+                    investment_type: 'Crypto',
                     amount: '',
-                    profit_loss: '',
-                    notes: '',
                 });
                 setShowForm(false);
                 fetchRecords();
@@ -103,47 +98,85 @@ export default function InvestmentsPage() {
         setSaving(false);
     };
 
+    const handleClaim = async () => {
+        if (!claimingId || !claimAmount) return;
+
+        setSaving(true);
+
+        try {
+            const rateData = await getUSDTRYRate();
+            const realizedPlTry = parseFloat(claimAmount);
+
+            const supabase = createClient();
+            const { error } = await supabase
+                .from('investments')
+                .update({
+                    status: 'claimed',
+                    realized_pl_try: realizedPlTry,
+                    realized_pl_usd: convertTRYtoUSD(realizedPlTry, rateData.rate),
+                    claimed_at: new Date().toISOString(),
+                })
+                .eq('id', claimingId);
+
+            if (!error) {
+                setClaimingId(null);
+                setClaimAmount('');
+                fetchRecords();
+            }
+        } catch (error) {
+            console.error('Error claiming investment:', error);
+        }
+
+        setSaving(false);
+    };
+
     const handleDelete = async (id: string) => {
         const supabase = createClient();
         await supabase.from('investments').delete().eq('id', id);
         fetchRecords();
     };
 
-    // Group by type for summary
-    const byType = records.reduce((acc, record) => {
-        const type = record.investment_type;
-        if (!acc[type]) {
-            acc[type] = { amount: 0, profitLoss: 0 };
-        }
-        acc[type].amount += Number(record.amount_try || record.amount);
-        acc[type].profitLoss += Number(record.profit_loss_try || record.profit_loss || 0);
-        return acc;
-    }, {} as Record<string, { amount: number; profitLoss: number }>);
-
-    // Group by date for chart
-    const groupedData = records.reduce((acc, record) => {
-        const date = record.date;
-        if (!acc[date]) {
-            acc[date] = { amount: 0, profitLoss: 0 };
-        }
-        acc[date].amount += Number(record.amount_try || record.amount);
-        acc[date].profitLoss += Number(record.profit_loss_try || record.profit_loss || 0);
-        return acc;
-    }, {} as Record<string, { amount: number; profitLoss: number }>);
-
-    const chartData = Object.entries(groupedData)
-        .map(([date, values]) => ({
-            date,
-            amount: values.amount,
-            profitLoss: values.profitLoss,
-        }))
-        .sort((a, b) => a.date.localeCompare(b.date));
+    // Filter records by status
+    const activeRecords = records.filter(r => r.status === 'active');
+    const claimedRecords = records.filter(r => r.status === 'claimed');
 
     // Calculate totals
-    const totalInvestedTRY = records.reduce((sum, r) => sum + Number(r.amount_try || r.amount), 0);
-    const totalProfitLossTRY = records.reduce((sum, r) => sum + Number(r.profit_loss_try || r.profit_loss || 0), 0);
-    const totalInvestedUSD = records.reduce((sum, r) => sum + Number(r.amount_usd || 0), 0);
-    const totalProfitLossUSD = records.reduce((sum, r) => sum + Number(r.profit_loss_usd || 0), 0);
+    const totalLockedCapitalTRY = activeRecords.reduce((sum, r) => sum + Number(r.invested_try || 0), 0);
+    const totalLockedCapitalUSD = activeRecords.reduce((sum, r) => sum + Number(r.invested_usd || 0), 0);
+
+    const totalRealizedPLTRY = claimedRecords.reduce((sum, r) => sum + Number(r.realized_pl_try || 0), 0);
+    const totalRealizedPLUSD = claimedRecords.reduce((sum, r) => sum + Number(r.realized_pl_usd || 0), 0);
+
+    const totalClaimedPrincipalTRY = claimedRecords.reduce((sum, r) => sum + Number(r.invested_try || 0), 0);
+
+    // Group by type for summary (active only)
+    const byType = activeRecords.reduce((acc, record) => {
+        const type = record.investment_type;
+        if (!acc[type]) {
+            acc[type] = { amount: 0 };
+        }
+        acc[type].amount += Number(record.invested_try || 0);
+        return acc;
+    }, {} as Record<string, { amount: number }>);
+
+    // Chart data - show locked capital over time
+    const chartData = records
+        .filter(r => r.status === 'active')
+        .reduce((acc, record) => {
+            const date = record.date;
+            if (!acc[date]) {
+                acc[date] = { locked: 0 };
+            }
+            acc[date].locked += Number(record.invested_try || 0);
+            return acc;
+        }, {} as Record<string, { locked: number }>);
+
+    const chartDataArray = Object.entries(chartData)
+        .map(([date, values]) => ({
+            date,
+            locked: values.locked,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
 
     if (loading) {
         return (
@@ -160,7 +193,7 @@ export default function InvestmentsPage() {
                 <div>
                     <h1 className="text-2xl font-bold">Investments</h1>
                     <p className="text-slate-400 text-sm mt-1">
-                        Track your investment portfolio and profit/loss status
+                        Track your investments – claim to realize profit/loss
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -178,9 +211,9 @@ export default function InvestmentsPage() {
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">New Investment Entry</h3>
+                    <h3 className="text-lg font-semibold mb-4">New Investment</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div className="grid md:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
@@ -213,26 +246,10 @@ export default function InvestmentsPage() {
                                     required
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Profit/Loss (₺)</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.profit_loss}
-                                    onChange={(e) => setFormData({ ...formData, profit_loss: e.target.value })}
-                                    placeholder="5000 or -2000"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Notes</label>
-                                <input
-                                    type="text"
-                                    value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    placeholder="Additional info..."
-                                />
-                            </div>
                         </div>
+                        <p className="text-xs text-slate-500">
+                            💡 Investment will be marked as &quot;Locked Capital&quot; until you claim it with realized profit/loss.
+                        </p>
                         <div className="flex justify-end gap-3">
                             <button
                                 type="button"
@@ -253,75 +270,132 @@ export default function InvestmentsPage() {
                 </div>
             )}
 
+            {/* Claim Modal */}
+            {claimingId && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+                    <div className="glass-dark rounded-2xl p-6 w-full max-w-md slide-in">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold">Claim Investment</h3>
+                            <button
+                                onClick={() => setClaimingId(null)}
+                                className="p-2 rounded-lg hover:bg-slate-700/50"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-2">
+                                    Realized Profit/Loss (₺ TRY)
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={claimAmount}
+                                    onChange={(e) => setClaimAmount(e.target.value)}
+                                    placeholder="+5000 or -2000"
+                                    className="w-full"
+                                    autoFocus
+                                />
+                                <p className="text-xs text-slate-500 mt-2">
+                                    Enter positive value for profit, negative for loss.
+                                </p>
+                            </div>
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => setClaimingId(null)}
+                                    className="btn btn-secondary"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleClaim}
+                                    disabled={saving || !claimAmount}
+                                    className="btn btn-primary"
+                                >
+                                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Claim'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Stats Cards */}
             <div className="grid md:grid-cols-3 gap-4">
                 <div className="glass-dark rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-accent-500/20 flex items-center justify-center">
-                            <PiggyBank className="w-6 h-6 text-accent-400" />
+                        <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                            <Lock className="w-6 h-6 text-amber-400" />
                         </div>
-                        <span className="text-slate-400 text-sm">Total Investment</span>
+                        <span className="text-slate-400 text-sm">Locked Capital</span>
                     </div>
-                    <p className="text-3xl font-bold">
-                        {formatTRY(totalInvestedTRY)}
+                    <p className="text-3xl font-bold text-amber-400">
+                        {formatTRY(totalLockedCapitalTRY)}
                     </p>
                     <p className="text-sm text-slate-500 mt-1">
-                        {formatUSDSecondary(totalInvestedUSD)}
+                        {formatUSDSecondary(totalLockedCapitalUSD)}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-2">
+                        {activeRecords.length} active investment{activeRecords.length !== 1 ? 's' : ''}
                     </p>
                 </div>
 
                 <div className="glass-dark rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-4">
-                        <div className={`w-12 h-12 rounded-xl ${totalProfitLossTRY >= 0 ? 'bg-emerald-500/20' : 'bg-red-500/20'} flex items-center justify-center`}>
-                            {totalProfitLossTRY >= 0
+                        <div className={`w-12 h-12 rounded-xl ${totalRealizedPLTRY >= 0 ? 'bg-emerald-500/20' : 'bg-red-500/20'} flex items-center justify-center`}>
+                            {totalRealizedPLTRY >= 0
                                 ? <TrendingUp className="w-6 h-6 text-emerald-400" />
                                 : <TrendingDown className="w-6 h-6 text-red-400" />
                             }
                         </div>
-                        <span className="text-slate-400 text-sm">Total Profit/Loss</span>
+                        <span className="text-slate-400 text-sm">Realized P/L</span>
                     </div>
-                    <p className={`text-3xl font-bold ${totalProfitLossTRY >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {totalProfitLossTRY >= 0 ? '+' : ''}{formatTRY(totalProfitLossTRY)}
+                    <p className={`text-3xl font-bold ${totalRealizedPLTRY >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {totalRealizedPLTRY >= 0 ? '+' : ''}{formatTRY(totalRealizedPLTRY)}
                     </p>
                     <p className="text-sm text-slate-500 mt-1">
-                        {totalProfitLossTRY >= 0 ? '+' : ''}{formatUSDSecondary(totalProfitLossUSD)}
+                        {totalRealizedPLTRY >= 0 ? '+' : ''}{formatUSDSecondary(totalRealizedPLUSD)}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-2">
+                        {claimedRecords.length} claimed investment{claimedRecords.length !== 1 ? 's' : ''}
                     </p>
                 </div>
 
                 <div className="glass-dark rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-12 h-12 rounded-xl bg-sky-500/20 flex items-center justify-center">
-                            <span className="text-sky-400 text-lg font-bold">%</span>
+                            <CheckCircle className="w-6 h-6 text-sky-400" />
                         </div>
-                        <span className="text-slate-400 text-sm">Return Rate</span>
+                        <span className="text-slate-400 text-sm">Total Returned</span>
                     </div>
-                    <p className={`text-4xl font-bold ${totalProfitLossTRY >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {totalInvestedTRY > 0
-                            ? `${((totalProfitLossTRY / totalInvestedTRY) * 100).toFixed(1)}%`
-                            : '0%'
-                        }
+                    <p className="text-3xl font-bold">
+                        {formatTRY(totalClaimedPrincipalTRY + totalRealizedPLTRY)}
+                    </p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        Principal: {formatTRY(totalClaimedPrincipalTRY)}
                     </p>
                 </div>
             </div>
 
-            {/* Portfolio Distribution */}
+            {/* Portfolio Distribution (Active Only) */}
             {Object.keys(byType).length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Portfolio Distribution</h3>
+                    <h3 className="text-lg font-semibold mb-4">Active Portfolio Distribution</h3>
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {Object.entries(byType).map(([type, data]) => (
                             <div key={type} className="glass rounded-xl p-4">
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="font-medium">{type}</span>
-                                    <span className={`text-xs font-medium ${data.profitLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                        {data.profitLoss >= 0 ? '+' : ''}{formatTRY(data.profitLoss)}
+                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-400">
+                                        Locked
                                     </span>
                                 </div>
                                 <p className="text-xl font-bold">{formatTRY(data.amount)}</p>
                                 <div className="mt-2 h-2 bg-slate-700 rounded-full overflow-hidden">
                                     <div
-                                        className="h-full bg-gradient-to-r from-primary-500 to-accent-500"
-                                        style={{ width: `${(data.amount / totalInvestedTRY) * 100}%` }}
+                                        className="h-full bg-gradient-to-r from-amber-500 to-orange-500"
+                                        style={{ width: `${(data.amount / totalLockedCapitalTRY) * 100}%` }}
                                     />
                                 </div>
                             </div>
@@ -331,13 +405,13 @@ export default function InvestmentsPage() {
             )}
 
             {/* Chart */}
-            {chartData.length > 0 && (
+            {chartDataArray.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Profit/Loss Trend (₺)</h3>
+                    <h3 className="text-lg font-semibold mb-4">Locked Capital Over Time (₺)</h3>
                     <TimeSeriesChart
-                        data={chartData}
+                        data={chartDataArray}
                         lines={[
-                            { dataKey: 'profitLoss', name: 'Profit/Loss', color: totalProfitLossTRY >= 0 ? '#10b981' : '#ef4444' },
+                            { dataKey: 'locked', name: 'Locked Capital', color: '#f59e0b' },
                         ]}
                         height={300}
                         showLegend={false}
@@ -345,80 +419,166 @@ export default function InvestmentsPage() {
                 </div>
             )}
 
-            {/* Data Table */}
+            {/* Tabs */}
             <div className="glass-dark rounded-2xl p-6">
-                <h3 className="text-lg font-semibold mb-4">Recent Entries</h3>
-                {records.length === 0 ? (
-                    <p className="text-slate-500 text-center py-8">
-                        No investment records yet. Click the button above to add one.
-                    </p>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-slate-700/50">
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Type</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Amount</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Profit/Loss</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Rate</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Notes</th>
-                                    <th className="px-4 py-3"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {records.map((record) => (
-                                    <tr key={record.id} className="border-b border-slate-700/30 hover:bg-slate-700/20">
-                                        <td className="px-4 py-3 text-sm">{formatDate(record.date)}</td>
-                                        <td className="px-4 py-3 text-sm">
-                                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-accent-500/20 text-accent-400">
-                                                {record.investment_type}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm">
-                                            <div>
-                                                <span className="font-medium">
-                                                    {formatTRY(Number(record.amount_try || record.amount))}
-                                                </span>
-                                                {record.amount_usd && (
-                                                    <span className="text-slate-500 text-xs ml-2">
-                                                        {formatUSDSecondary(record.amount_usd)}
+                <div className="flex gap-4 mb-6">
+                    <button
+                        onClick={() => setActiveTab('active')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'active'
+                                ? 'bg-amber-500/20 text-amber-400'
+                                : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                    >
+                        <Lock className="w-4 h-4 inline mr-2" />
+                        Active ({activeRecords.length})
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('claimed')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'claimed'
+                                ? 'bg-emerald-500/20 text-emerald-400'
+                                : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                    >
+                        <CheckCircle className="w-4 h-4 inline mr-2" />
+                        Claimed ({claimedRecords.length})
+                    </button>
+                </div>
+
+                {/* Active Investments Table */}
+                {activeTab === 'active' && (
+                    <>
+                        {activeRecords.length === 0 ? (
+                            <p className="text-slate-500 text-center py-8">
+                                No active investments. Click &quot;Add Investment&quot; to start.
+                            </p>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b border-slate-700/50">
+                                            <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
+                                            <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Type</th>
+                                            <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Invested</th>
+                                            <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Status</th>
+                                            <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Rate</th>
+                                            <th className="px-4 py-3"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {activeRecords.map((record) => (
+                                            <tr key={record.id} className="border-b border-slate-700/30 hover:bg-slate-700/20">
+                                                <td className="px-4 py-3 text-sm">{formatDate(record.date)}</td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-accent-500/20 text-accent-400">
+                                                        {record.investment_type}
                                                     </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm">
-                                            <div>
-                                                <span className={`font-medium ${Number(record.profit_loss_try || record.profit_loss || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                    {Number(record.profit_loss_try || record.profit_loss || 0) >= 0 ? '+' : ''}
-                                                    {formatTRY(Number(record.profit_loss_try || record.profit_loss || 0))}
-                                                </span>
-                                                {record.profit_loss_usd && (
-                                                    <span className="text-slate-500 text-xs ml-2">
-                                                        {formatUSDSecondary(record.profit_loss_usd)}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    <div>
+                                                        <span className="font-medium">
+                                                            {formatTRY(Number(record.invested_try || 0))}
+                                                        </span>
+                                                        {record.invested_usd && (
+                                                            <span className="text-slate-500 text-xs ml-2">
+                                                                {formatUSDSecondary(record.invested_usd)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-400">
+                                                        <Lock className="w-3 h-3" />
+                                                        Locked
                                                     </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-slate-400">
-                                            {record.exchange_rate_usd_try ? `${record.exchange_rate_usd_try.toFixed(2)}` : '-'}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-slate-400 max-w-xs truncate">
-                                            {record.notes || '-'}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <button
-                                                onClick={() => handleDelete(record.id)}
-                                                className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-slate-400">
+                                                    {record.exchange_rate_usd_try ? `${record.exchange_rate_usd_try.toFixed(2)}` : '-'}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => setClaimingId(record.id)}
+                                                            className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 text-sm font-medium hover:bg-emerald-500/30 transition-colors"
+                                                        >
+                                                            Claim
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(record.id)}
+                                                            className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* Claimed Investments Table */}
+                {activeTab === 'claimed' && (
+                    <>
+                        {claimedRecords.length === 0 ? (
+                            <p className="text-slate-500 text-center py-8">
+                                No claimed investments yet. Claim an active investment to see it here.
+                            </p>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b border-slate-700/50">
+                                            <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Invested</th>
+                                            <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Type</th>
+                                            <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Amount</th>
+                                            <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Realized P/L</th>
+                                            <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Claimed</th>
+                                            <th className="px-4 py-3"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {claimedRecords.map((record) => {
+                                            const pl = Number(record.realized_pl_try || 0);
+                                            return (
+                                                <tr key={record.id} className="border-b border-slate-700/30 hover:bg-slate-700/20">
+                                                    <td className="px-4 py-3 text-sm">{formatDate(record.date)}</td>
+                                                    <td className="px-4 py-3 text-sm">
+                                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-accent-500/20 text-accent-400">
+                                                            {record.investment_type}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm">
+                                                        <span className="font-medium">
+                                                            {formatTRY(Number(record.invested_try || 0))}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm">
+                                                        <span className={`font-medium ${pl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                            {pl >= 0 ? '+' : ''}{formatTRY(pl)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-slate-400">
+                                                        {record.claimed_at ? formatDate(record.claimed_at.split('T')[0]) : '-'}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <button
+                                                            onClick={() => handleDelete(record.id)}
+                                                            className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </div>

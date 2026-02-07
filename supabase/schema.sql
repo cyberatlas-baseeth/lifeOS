@@ -92,15 +92,26 @@ CREATE TABLE IF NOT EXISTS expenses (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Investments
+-- Investments (Claim-Based Lifecycle)
+-- Active investments = locked capital (negative to net worth)
+-- Claimed investments = realized returns (principal + P/L added to net worth)
 CREATE TABLE IF NOT EXISTS investments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   wallet_address TEXT NOT NULL REFERENCES profiles(wallet_address) ON DELETE CASCADE,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   investment_type TEXT NOT NULL,
-  amount DECIMAL(15,2) NOT NULL,
-  profit_loss DECIMAL(15,2) DEFAULT 0,
-  notes TEXT,
+  -- Invested amount (locked capital)
+  invested_try DECIMAL(15,2) NOT NULL,
+  invested_usd DECIMAL(15,2) NOT NULL,
+  -- Lifecycle status
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'claimed')),
+  -- Only set when claimed
+  realized_pl_try DECIMAL(15,2),
+  realized_pl_usd DECIMAL(15,2),
+  claimed_at TIMESTAMPTZ,
+  -- Exchange rate at creation
+  exchange_rate_usd_try DECIMAL(10,4),
+  exchange_rate_date DATE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

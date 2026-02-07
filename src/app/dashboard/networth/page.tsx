@@ -7,7 +7,7 @@ import { formatTRY, formatUSDSecondary } from '@/lib/currency';
 import { formatDate } from '@/lib/utils';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import LiveExchangeRate from '@/components/ui/LiveExchangeRate';
-import { Wallet, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, PiggyBank, Receipt, Loader2 } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Lock, CheckCircle, Receipt, Loader2 } from 'lucide-react';
 
 export default function NetWorthPage() {
     const { session } = useWallet();
@@ -47,7 +47,8 @@ export default function NetWorthPage() {
 
     const investmentChartData = snapshots.map(s => ({
         date: s.date,
-        investments: s.investments_try,
+        locked: s.active_investments_try,
+        realized: s.claimed_investments_try,
     }));
 
     if (loading) {
@@ -60,6 +61,9 @@ export default function NetWorthPage() {
 
     const isPositive = (summary?.current_try || 0) >= 0;
     const isGrowing = (summary?.change_percent || 0) >= 0;
+
+    // Investment net effect = realized returns - locked capital
+    const investmentNetEffect = (summary?.realized_returns_try || 0) - (summary?.locked_capital_try || 0);
 
     return (
         <div className="space-y-6 fade-in">
@@ -105,12 +109,12 @@ export default function NetWorthPage() {
                 {/* Formula explanation */}
                 <div className="glass rounded-xl p-4 text-sm text-slate-400">
                     <span className="font-medium text-slate-300">Calculation:</span>{' '}
-                    Total Income − Total Expenses + Investments
+                    Total Income − Total Expenses − Locked Capital + Realized Returns
                 </div>
             </div>
 
-            {/* Breakdown Cards */}
-            <div className="grid md:grid-cols-3 gap-4">
+            {/* Breakdown Cards - 4 columns */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Total Income */}
                 <div className="glass-dark rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-4">
@@ -143,22 +147,69 @@ export default function NetWorthPage() {
                     </p>
                 </div>
 
-                {/* Total Investments */}
+                {/* Locked Capital (Active Investments) */}
                 <div className="glass-dark rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-accent-500/20 flex items-center justify-center">
-                            <PiggyBank className="w-6 h-6 text-accent-400" />
+                        <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                            <Lock className="w-6 h-6 text-amber-400" />
                         </div>
-                        <span className="text-slate-400 text-sm">Investments</span>
+                        <span className="text-slate-400 text-sm">Locked Capital</span>
                     </div>
-                    <p className="text-2xl font-bold">
-                        {(summary?.total_investments_try || 0) >= 0 ? '+' : ''}{formatTRY(summary?.total_investments_try || 0)}
+                    <p className="text-2xl font-bold text-amber-400">
+                        −{formatTRY(summary?.locked_capital_try || 0)}
                     </p>
                     <p className="text-sm text-slate-500 mt-1">
-                        {formatUSDSecondary(summary?.total_investments_usd || 0)}
+                        Active investments
+                    </p>
+                </div>
+
+                {/* Realized Returns (Claimed Investments) */}
+                <div className="glass-dark rounded-xl p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 rounded-xl bg-sky-500/20 flex items-center justify-center">
+                            <CheckCircle className="w-6 h-6 text-sky-400" />
+                        </div>
+                        <span className="text-slate-400 text-sm">Realized Returns</span>
+                    </div>
+                    <p className="text-2xl font-bold text-sky-400">
+                        +{formatTRY(summary?.realized_returns_try || 0)}
+                    </p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        Claimed investments
                     </p>
                 </div>
             </div>
+
+            {/* Investment Effect Summary */}
+            {(summary?.locked_capital_try || summary?.realized_returns_try) ? (
+                <div className="glass-dark rounded-xl p-6">
+                    <h3 className="text-lg font-semibold mb-4">Investment Effect on Net Worth</h3>
+                    <div className="grid md:grid-cols-3 gap-4">
+                        <div className="glass rounded-xl p-4 text-center">
+                            <p className="text-sm text-slate-400 mb-1">Locked Capital</p>
+                            <p className="text-xl font-bold text-amber-400">
+                                −{formatTRY(summary?.locked_capital_try || 0)}
+                            </p>
+                        </div>
+                        <div className="glass rounded-xl p-4 text-center">
+                            <p className="text-sm text-slate-400 mb-1">Realized Returns</p>
+                            <p className="text-xl font-bold text-sky-400">
+                                +{formatTRY(summary?.realized_returns_try || 0)}
+                            </p>
+                        </div>
+                        <div className="glass rounded-xl p-4 text-center">
+                            <p className="text-sm text-slate-400 mb-1">Net Effect</p>
+                            <p className={`text-xl font-bold ${investmentNetEffect >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {investmentNetEffect >= 0 ? '+' : ''}{formatTRY(investmentNetEffect)}
+                            </p>
+                        </div>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-4">
+                        💡 Active investments reduce your net worth (locked capital).
+                        Claim investments to add realized returns back to your net worth.
+                    </p>
+                </div>
+            ) : null}
 
             {/* Net Worth Over Time Chart */}
             {netWorthChartData.length > 0 && (
@@ -191,17 +242,17 @@ export default function NetWorthPage() {
                 </div>
             )}
 
-            {/* Investments Growth Chart */}
+            {/* Investment Lifecycle Chart */}
             {investmentChartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Investment Growth (₺)</h3>
+                    <h3 className="text-lg font-semibold mb-4">Investment Lifecycle (₺)</h3>
                     <TimeSeriesChart
                         data={investmentChartData}
                         lines={[
-                            { dataKey: 'investments', name: 'Investments', color: '#8b5cf6' },
+                            { dataKey: 'locked', name: 'Locked Capital', color: '#f59e0b' },
+                            { dataKey: 'realized', name: 'Realized Returns', color: '#0ea5e9' },
                         ]}
                         height={300}
-                        showLegend={false}
                     />
                 </div>
             )}
@@ -220,7 +271,7 @@ export default function NetWorthPage() {
             {/* Data Sources Info */}
             <div className="glass rounded-xl p-4 text-sm text-slate-500">
                 <span className="font-medium text-slate-400">Data Sources:</span>{' '}
-                Income records • Expense records • Investment records
+                Income records • Expense records • Investment records (active & claimed)
                 <span className="float-right text-xs">
                     Last updated: {formatDate(new Date().toISOString().split('T')[0])}
                 </span>
