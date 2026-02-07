@@ -93,20 +93,24 @@ export interface Income {
     amount: number;
 }
 
+// Expense tag types
+export type ExpenseTag = 'rent' | 'bills' | 'lifestyle';
+
 export interface Expense {
     id: string;
     wallet_address: string;
     date: string;
-    category: 'fixed' | 'variable';
+    tag: ExpenseTag;
     // Currency fields
     amount_try: number;              // Primary value (TRY)
     amount_usd: number;              // Calculated (USD)
     exchange_rate_usd_try: number;   // Rate used at record time
     exchange_rate_date: string;      // Date of exchange rate
-    description: string | null;
     created_at: string;
-    // Legacy field (for backwards compatibility)
+    // Legacy fields (for backwards compatibility)
     amount: number;
+    category?: 'fixed' | 'variable';
+    description?: string | null;
 }
 
 // Investment status type

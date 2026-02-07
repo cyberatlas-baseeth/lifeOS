@@ -3,12 +3,19 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
-import { Expense } from '@/types/database';
+import { Expense, ExpenseTag } from '@/types/database';
 import { formatDate, formatDateForInput } from '@/lib/utils';
 import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import LiveExchangeRate from '@/components/ui/LiveExchangeRate';
-import { Plus, Trash2, TrendingDown, Home, ShoppingCart, Loader2 } from 'lucide-react';
+import { Plus, Trash2, TrendingDown, Home, Zap, ShoppingBag, Loader2 } from 'lucide-react';
+
+// Tag configuration with labels and colors
+const EXPENSE_TAGS: { value: ExpenseTag; label: string; icon: typeof Home; color: string; bgColor: string }[] = [
+    { value: 'rent', label: 'Rent', icon: Home, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+    { value: 'bills', label: 'Bills', icon: Zap, color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
+    { value: 'lifestyle', label: 'Lifestyle', icon: ShoppingBag, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+];
 
 export default function ExpensesPage() {
     const { session } = useWallet();
@@ -16,12 +23,12 @@ export default function ExpensesPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
         date: formatDateForInput(),
-        category: 'variable' as 'fixed' | 'variable',
+        tag: 'lifestyle' as ExpenseTag,
         amount: '',
-        description: '',
     });
 
     const fetchRecords = useCallback(async () => {
@@ -33,7 +40,7 @@ export default function ExpensesPage() {
             .select('*')
             .eq('wallet_address', session.walletAddress.toLowerCase())
             .order('date', { ascending: false })
-            .limit(50);
+            .limit(100);
 
         if (!error && data) {
             setRecords(data);
@@ -50,38 +57,44 @@ export default function ExpensesPage() {
         if (!session?.walletAddress) return;
 
         setSaving(true);
+        setError(null);
 
         try {
-            // Auto-fetch current exchange rate
             const rateData = await getUSDTRYRate();
             const amountTry = parseFloat(formData.amount);
             const amountUsd = convertTRYtoUSD(amountTry, rateData.rate);
 
             const supabase = createClient();
-            const { error } = await supabase.from('expenses').insert({
+            const { data, error: insertError } = await supabase.from('expenses').insert({
                 wallet_address: session.walletAddress.toLowerCase(),
                 date: formData.date,
-                category: formData.category,
+                tag: formData.tag,
                 amount_try: amountTry,
                 amount_usd: amountUsd,
                 exchange_rate_usd_try: rateData.rate,
                 exchange_rate_date: rateData.timestamp.split('T')[0],
-                description: formData.description || null,
+                // Backwards compatibility
                 amount: amountTry,
-            });
+                category: formData.tag === 'rent' ? 'fixed' : 'variable',
+            }).select();
 
-            if (!error) {
+            console.log('Insert result:', { data, error: insertError });
+
+            if (insertError) {
+                console.error('Supabase error:', insertError);
+                setError(`Failed to save: ${insertError.message}`);
+            } else {
                 setFormData({
                     date: formatDateForInput(),
-                    category: 'variable',
+                    tag: 'lifestyle',
                     amount: '',
-                    description: '',
                 });
                 setShowForm(false);
                 fetchRecords();
             }
         } catch (error) {
             console.error('Error saving expense:', error);
+            setError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
 
         setSaving(false);
@@ -93,42 +106,59 @@ export default function ExpensesPage() {
         fetchRecords();
     };
 
+    // Get tag for a record (with fallback for old data)
+    const getRecordTag = (record: Expense): ExpenseTag => {
+        if (record.tag) return record.tag;
+        // Fallback for old category-based data
+        if (record.category === 'fixed') return 'rent';
+        return 'lifestyle';
+    };
+
+    // Group by tag for stats
+    const tagTotals = records.reduce((acc, record) => {
+        const tag = getRecordTag(record);
+        const amount = Number(record.amount_try || record.amount || 0);
+        const amountUsd = Number(record.amount_usd || 0);
+        if (!acc[tag]) {
+            acc[tag] = { try: 0, usd: 0 };
+        }
+        acc[tag].try += amount;
+        acc[tag].usd += amountUsd;
+        return acc;
+    }, {} as Record<ExpenseTag, { try: number; usd: number }>);
+
+    const totalTRY = Object.values(tagTotals).reduce((sum, t) => sum + t.try, 0);
+    const totalUSD = Object.values(tagTotals).reduce((sum, t) => sum + t.usd, 0);
+
     // Group by date for chart
     const groupedData = records.reduce((acc, record) => {
         const date = record.date;
+        const tag = getRecordTag(record);
         if (!acc[date]) {
-            acc[date] = { fixed: 0, variable: 0 };
+            acc[date] = { rent: 0, bills: 0, lifestyle: 0 };
         }
-        const amount = record.amount_try || record.amount || 0;
-        acc[date][record.category] += Number(amount);
+        const amount = Number(record.amount_try || record.amount || 0);
+        acc[date][tag] += amount;
         return acc;
-    }, {} as Record<string, { fixed: number; variable: number }>);
+    }, {} as Record<string, { rent: number; bills: number; lifestyle: number }>);
 
     const chartData = Object.entries(groupedData)
         .map(([date, values]) => ({
             date,
-            fixed: values.fixed,
-            variable: values.variable,
-            total: values.fixed + values.variable,
+            rent: values.rent,
+            bills: values.bills,
+            lifestyle: values.lifestyle,
+            total: values.rent + values.bills + values.lifestyle,
         }))
         .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Calculate totals
-    const totalFixedTRY = records
-        .filter(r => r.category === 'fixed')
-        .reduce((sum, r) => sum + Number(r.amount_try || r.amount || 0), 0);
-    const totalVariableTRY = records
-        .filter(r => r.category === 'variable')
-        .reduce((sum, r) => sum + Number(r.amount_try || r.amount || 0), 0);
-    const totalTRY = totalFixedTRY + totalVariableTRY;
-
-    const totalFixedUSD = records
-        .filter(r => r.category === 'fixed')
-        .reduce((sum, r) => sum + Number(r.amount_usd || 0), 0);
-    const totalVariableUSD = records
-        .filter(r => r.category === 'variable')
-        .reduce((sum, r) => sum + Number(r.amount_usd || 0), 0);
-    const totalUSD = totalFixedUSD + totalVariableUSD;
+    // Tag breakdown for pie-style display
+    const tagBreakdown = EXPENSE_TAGS.map(tag => ({
+        ...tag,
+        amount: tagTotals[tag.value]?.try || 0,
+        amountUsd: tagTotals[tag.value]?.usd || 0,
+        percentage: totalTRY > 0 ? ((tagTotals[tag.value]?.try || 0) / totalTRY) * 100 : 0,
+    }));
 
     if (loading) {
         return (
@@ -145,7 +175,7 @@ export default function ExpensesPage() {
                 <div>
                     <h1 className="text-2xl font-bold">Expenses</h1>
                     <p className="text-slate-400 text-sm mt-1">
-                        Track your fixed and variable expenses
+                        Track your spending by category
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -163,9 +193,9 @@ export default function ExpensesPage() {
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">New Expense Entry</h3>
+                    <h3 className="text-lg font-semibold mb-4">New Expense</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid md:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Date</label>
                                 <input
@@ -178,12 +208,13 @@ export default function ExpensesPage() {
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Category</label>
                                 <select
-                                    value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value as 'fixed' | 'variable' })}
+                                    value={formData.tag}
+                                    onChange={(e) => setFormData({ ...formData, tag: e.target.value as ExpenseTag })}
                                     required
                                 >
-                                    <option value="fixed">Fixed Expense</option>
-                                    <option value="variable">Variable Expense</option>
+                                    <option value="rent">🏠 Rent (Housing, Mortgage)</option>
+                                    <option value="bills">💡 Bills (Utilities, Subscriptions)</option>
+                                    <option value="lifestyle">🛍️ Lifestyle (Shopping, Entertainment)</option>
                                 </select>
                             </div>
                             <div>
@@ -198,16 +229,12 @@ export default function ExpensesPage() {
                                     required
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Description</label>
-                                <input
-                                    type="text"
-                                    value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    placeholder="Rent, bills, groceries, etc."
-                                />
-                            </div>
                         </div>
+                        {error && (
+                            <div className="p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">
+                                {error}
+                            </div>
+                        )}
                         <div className="flex justify-end gap-3">
                             <button
                                 type="button"
@@ -229,7 +256,8 @@ export default function ExpensesPage() {
             )}
 
             {/* Stats Cards */}
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-4 gap-4">
+                {/* Total */}
                 <div className="glass-dark rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center">
@@ -245,47 +273,45 @@ export default function ExpensesPage() {
                     </p>
                 </div>
 
-                <div className="glass-dark rounded-xl p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                            <Home className="w-6 h-6 text-amber-400" />
+                {/* Tag Cards */}
+                {tagBreakdown.map((tag) => {
+                    const IconComponent = tag.icon;
+                    return (
+                        <div key={tag.value} className="glass-dark rounded-xl p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className={`w-12 h-12 rounded-xl ${tag.bgColor} flex items-center justify-center`}>
+                                    <IconComponent className={`w-6 h-6 ${tag.color}`} />
+                                </div>
+                                <span className="text-slate-400 text-sm">{tag.label}</span>
+                            </div>
+                            <p className="text-2xl font-bold">
+                                {formatTRY(tag.amount)}
+                            </p>
+                            <div className="flex items-center gap-2 mt-2">
+                                <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full ${tag.bgColor.replace('/20', '')}`}
+                                        style={{ width: `${tag.percentage}%` }}
+                                    />
+                                </div>
+                                <span className="text-xs text-slate-500">{tag.percentage.toFixed(0)}%</span>
+                            </div>
                         </div>
-                        <span className="text-slate-400 text-sm">Fixed Expenses</span>
-                    </div>
-                    <p className="text-2xl font-bold">
-                        {formatTRY(totalFixedTRY)}
-                    </p>
-                    <p className="text-sm text-slate-500 mt-1">
-                        {formatUSDSecondary(totalFixedUSD)}
-                    </p>
-                </div>
-
-                <div className="glass-dark rounded-xl p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
-                            <ShoppingCart className="w-6 h-6 text-orange-400" />
-                        </div>
-                        <span className="text-slate-400 text-sm">Variable Expenses</span>
-                    </div>
-                    <p className="text-2xl font-bold">
-                        {formatTRY(totalVariableTRY)}
-                    </p>
-                    <p className="text-sm text-slate-500 mt-1">
-                        {formatUSDSecondary(totalVariableUSD)}
-                    </p>
-                </div>
+                    );
+                })}
             </div>
 
             {/* Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Expense Trend (₺)</h3>
+                    <h3 className="text-lg font-semibold mb-4">Expense Trend by Category (₺)</h3>
                     <TimeSeriesChart
                         data={chartData}
                         type="bar"
                         bars={[
-                            { dataKey: 'fixed', name: 'Fixed', color: '#fbbf24' },
-                            { dataKey: 'variable', name: 'Variable', color: '#fb923c' },
+                            { dataKey: 'rent', name: 'Rent', color: '#3b82f6' },
+                            { dataKey: 'bills', name: 'Bills', color: '#fbbf24' },
+                            { dataKey: 'lifestyle', name: 'Lifestyle', color: '#a855f7' },
                         ]}
                         height={300}
                     />
@@ -294,10 +320,10 @@ export default function ExpensesPage() {
 
             {/* Data Table */}
             <div className="glass-dark rounded-2xl p-6">
-                <h3 className="text-lg font-semibold mb-4">Recent Entries</h3>
+                <h3 className="text-lg font-semibold mb-4">Recent Expenses</h3>
                 {records.length === 0 ? (
                     <p className="text-slate-500 text-center py-8">
-                        No expense records yet. Click the button above to add one.
+                        No expense records yet. Click &quot;Add Expense&quot; to start tracking.
                     </p>
                 ) : (
                     <div className="overflow-x-auto">
@@ -308,52 +334,49 @@ export default function ExpensesPage() {
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Category</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Amount</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Rate</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Description</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {records.map((record) => (
-                                    <tr key={record.id} className="border-b border-slate-700/30 hover:bg-slate-700/20">
-                                        <td className="px-4 py-3 text-sm">{formatDate(record.date)}</td>
-                                        <td className="px-4 py-3 text-sm">
-                                            <span className={`
-                                                px-2 py-1 rounded-full text-xs font-medium
-                                                ${record.category === 'fixed'
-                                                    ? 'bg-amber-500/20 text-amber-400'
-                                                    : 'bg-orange-500/20 text-orange-400'}
-                                            `}>
-                                                {record.category === 'fixed' ? 'Fixed' : 'Variable'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm">
-                                            <div>
-                                                <span className="font-medium text-red-400">
-                                                    -{formatTRY(Number(record.amount_try || record.amount || 0))}
+                                {records.map((record) => {
+                                    const tag = getRecordTag(record);
+                                    const tagConfig = EXPENSE_TAGS.find(t => t.value === tag) || EXPENSE_TAGS[2];
+                                    const IconComponent = tagConfig.icon;
+                                    return (
+                                        <tr key={record.id} className="border-b border-slate-700/30 hover:bg-slate-700/20">
+                                            <td className="px-4 py-3 text-sm">{formatDate(record.date)}</td>
+                                            <td className="px-4 py-3 text-sm">
+                                                <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${tagConfig.bgColor} ${tagConfig.color}`}>
+                                                    <IconComponent className="w-3 h-3" />
+                                                    {tagConfig.label}
                                                 </span>
-                                                {record.amount_usd && (
-                                                    <span className="text-slate-500 text-xs ml-2">
-                                                        {formatUSDSecondary(record.amount_usd)}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm">
+                                                <div>
+                                                    <span className="font-medium text-red-400">
+                                                        -{formatTRY(Number(record.amount_try || record.amount || 0))}
                                                     </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-slate-400">
-                                            {record.exchange_rate_usd_try ? `${record.exchange_rate_usd_try.toFixed(2)}` : '-'}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-slate-400 max-w-xs truncate">
-                                            {record.description || '-'}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <button
-                                                onClick={() => handleDelete(record.id)}
-                                                className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                                    {record.amount_usd && (
+                                                        <span className="text-slate-500 text-xs ml-2">
+                                                            {formatUSDSecondary(record.amount_usd)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-slate-400">
+                                                {record.exchange_rate_usd_try ? `${record.exchange_rate_usd_try.toFixed(2)}` : '-'}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <button
+                                                    onClick={() => handleDelete(record.id)}
+                                                    className="p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
