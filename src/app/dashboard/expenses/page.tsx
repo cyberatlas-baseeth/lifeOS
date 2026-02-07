@@ -8,13 +8,14 @@ import { formatDate, formatDateForInput } from '@/lib/utils';
 import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import LiveExchangeRate from '@/components/ui/LiveExchangeRate';
-import { Plus, Trash2, TrendingDown, Home, Zap, ShoppingBag, Loader2, Pencil, X } from 'lucide-react';
+import { Plus, Trash2, TrendingDown, Home, Zap, ShoppingBag, Loader2, Pencil, X, Heart } from 'lucide-react';
 
 // Tag configuration with labels and colors
 const EXPENSE_TAGS: { value: ExpenseTag; label: string; icon: typeof Home; color: string; bgColor: string }[] = [
     { value: 'rent', label: 'Rent', icon: Home, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
     { value: 'bills', label: 'Bills', icon: Zap, color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
     { value: 'lifestyle', label: 'Lifestyle', icon: ShoppingBag, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+    { value: 'family_support', label: 'Family Support', icon: Heart, color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
 ];
 
 export default function ExpensesPage() {
@@ -176,12 +177,12 @@ export default function ExpensesPage() {
         const date = record.date;
         const tag = getRecordTag(record);
         if (!acc[date]) {
-            acc[date] = { rent: 0, bills: 0, lifestyle: 0 };
+            acc[date] = { rent: 0, bills: 0, lifestyle: 0, family_support: 0 };
         }
         const amount = Number(record.amount_try || record.amount || 0);
         acc[date][tag] += amount;
         return acc;
-    }, {} as Record<string, { rent: number; bills: number; lifestyle: number }>);
+    }, {} as Record<string, { rent: number; bills: number; lifestyle: number; family_support: number }>);
 
     const chartData = Object.entries(groupedData)
         .map(([date, values]) => ({
@@ -189,7 +190,8 @@ export default function ExpensesPage() {
             rent: values.rent,
             bills: values.bills,
             lifestyle: values.lifestyle,
-            total: values.rent + values.bills + values.lifestyle,
+            family_support: values.family_support,
+            total: values.rent + values.bills + values.lifestyle + values.family_support,
         }))
         .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -366,6 +368,7 @@ export default function ExpensesPage() {
                             { dataKey: 'rent', name: 'Rent', color: '#3b82f6' },
                             { dataKey: 'bills', name: 'Bills', color: '#fbbf24' },
                             { dataKey: 'lifestyle', name: 'Lifestyle', color: '#a855f7' },
+                            { dataKey: 'family_support', name: 'Family Support', color: '#ec4899' },
                         ]}
                         height={300}
                     />

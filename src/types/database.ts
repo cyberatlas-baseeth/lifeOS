@@ -94,7 +94,7 @@ export interface Income {
 }
 
 // Expense tag types
-export type ExpenseTag = 'rent' | 'bills' | 'lifestyle';
+export type ExpenseTag = 'rent' | 'bills' | 'lifestyle' | 'family_support';
 
 export interface Expense {
     id: string;
