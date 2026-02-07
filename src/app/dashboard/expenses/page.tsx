@@ -15,7 +15,7 @@ const EXPENSE_TAGS: { value: ExpenseTag; label: string; icon: typeof Home; color
     { value: 'rent', label: 'Rent', icon: Home, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
     { value: 'bills', label: 'Bills', icon: Zap, color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
     { value: 'lifestyle', label: 'Lifestyle', icon: ShoppingBag, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
-    { value: 'family_support', label: 'Family Support', icon: Heart, color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
+    { value: 'family_support', label: '👨‍👩‍👧 Family Support', icon: Heart, color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
 ];
 
 export default function ExpensesPage() {
@@ -271,6 +271,7 @@ export default function ExpensesPage() {
                                     <option value="rent">🏠 Rent (Housing, Mortgage)</option>
                                     <option value="bills">💡 Bills (Utilities, Subscriptions)</option>
                                     <option value="lifestyle">🛍️ Lifestyle (Shopping, Entertainment)</option>
+                                    <option value="family_support">👨‍👩‍👧 Family Support (Parents, Relatives)</option>
                                 </select>
                             </div>
                             <div>
