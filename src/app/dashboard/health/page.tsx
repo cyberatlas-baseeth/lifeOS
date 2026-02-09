@@ -3,41 +3,81 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useWallet } from '@/lib/wallet/WalletContext';
-import { HealthMetric, MealQuality, ProcessedFoodLevel, WaterIntake, IllnessStatus, ActivityLevel } from '@/types/database';
+import {
+    HealthMetric,
+    MealQuality,
+    ProcessedFoodLevel,
+    WaterIntake,
+    IllnessStatus,
+    ActivityLevel,
+    SleepRegularity,
+    StressLevel,
+    MotivationLevel,
+    FatigueLevel,
+    AlcoholLevel,
+    ScreenTime,
+} from '@/types/database';
 import { formatDate, formatDateForInput } from '@/lib/utils';
 import {
-    calculateHealthScore,
     getHealthScoreBreakdown,
     HealthScoreInput,
     ACTIVITY_LABELS,
     SLEEP_OPTIONS,
     SleepDuration,
-    calculateSleepScore,
-    calculateActivityScore
+    BEDTIME_OPTIONS,
+    REGULARITY_LABELS,
+    STRESS_LABELS,
+    MOTIVATION_LABELS,
+    FATIGUE_LABELS,
+    ALCOHOL_LABELS,
+    SCREEN_TIME_LABELS,
+    CATEGORY_WEIGHTS,
+    getHealthStateLabel,
 } from '@/lib/healthScore';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
-import { Plus, Trash2, Moon, Activity as ActivityIcon, Heart, Loader2, Info, X, Pencil } from 'lucide-react';
+import { Plus, Trash2, Moon, Activity as ActivityIcon, Heart, Loader2, Info, X, Pencil, Brain, Wine, Cigarette, Monitor, Droplets, Utensils, Clock } from 'lucide-react';
 
 interface FormData {
     date: string;
+    // Sleep
     sleep_hours: SleepDuration | '';
+    bedtime: string;
+    sleep_regularity: SleepRegularity | '';
+    // Activity
     activity_level: ActivityLevel | '';
+    // Nutrition
     meal_quality: MealQuality | '';
     processed_food_level: ProcessedFoodLevel | '';
+    // Hydration
     water_intake: WaterIntake | '';
+    // Mental State
+    stress_level: StressLevel | '';
+    motivation_level: MotivationLevel | '';
+    mental_fatigue: FatigueLevel | '';
+    // Extras
+    alcohol_units: AlcoholLevel | '';
+    smoking: boolean;
+    screen_time: ScreenTime | '';
+    // Illness
     illness_status: IllnessStatus | '';
-
 }
 
 const initialFormData: FormData = {
     date: formatDateForInput(),
     sleep_hours: '',
+    bedtime: '',
+    sleep_regularity: '',
     activity_level: '',
     meal_quality: '',
     processed_food_level: '',
     water_intake: '',
+    stress_level: '',
+    motivation_level: '',
+    mental_fatigue: '',
+    alcohol_units: '',
+    smoking: false,
+    screen_time: '',
     illness_status: '',
-
 };
 
 export default function HealthPage() {
@@ -47,45 +87,29 @@ export default function HealthPage() {
     const [saving, setSaving] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [showTooltip, setShowTooltip] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [formData, setFormData] = useState<FormData>(initialFormData);
-
-    // Get last 3 days of activity data (including today's input if provided)
-    const getLast3DaysActivity = useMemo(() => {
-        // Get the date we're editing
-        const currentDate = formData.date;
-
-        // Filter metrics for dates before the current date being edited
-        const previousMetrics = metrics
-            .filter(m => m.date < currentDate && m.activity_level)
-            .slice(0, 2) // Get up to 2 previous days (most recent first)
-            .reverse(); // Oldest to newest
-
-        // Build the activity array (oldest to newest, including today)
-        const activityLevels = previousMetrics.map(m => m.activity_level as number);
-        if (formData.activity_level) {
-            activityLevels.push(formData.activity_level);
-        }
-
-        return activityLevels;
-    }, [metrics, formData.date, formData.activity_level]);
 
     // Calculate health score in real-time
     const scoreInput: HealthScoreInput = useMemo(() => ({
         sleepHours: formData.sleep_hours || null,
+        bedtime: formData.bedtime || null,
+        sleepRegularity: formData.sleep_regularity || null,
         activityLevel: formData.activity_level || null,
         mealQuality: formData.meal_quality || null,
-        waterIntake: formData.water_intake || null,
         processedFoodLevel: formData.processed_food_level || null,
+        waterIntake: formData.water_intake || null,
+        stressLevel: formData.stress_level || null,
+        motivationLevel: formData.motivation_level || null,
+        mentalFatigue: formData.mental_fatigue || null,
+        alcoholUnits: formData.alcohol_units || null,
+        smoking: formData.smoking,
+        screenTime: formData.screen_time || null,
         illnessStatus: formData.illness_status || null,
-        last3DaysActivity: getLast3DaysActivity,
-    }), [formData, getLast3DaysActivity]);
+    }), [formData]);
 
     const scoreBreakdown = useMemo(() => getHealthScoreBreakdown(scoreInput), [scoreInput]);
     const calculatedScore = scoreBreakdown.finalScore;
-
-    // Real-time score displays for individual fields
-    const currentSleepScore = formData.sleep_hours ? calculateSleepScore(formData.sleep_hours) : null;
-    const currentActivityScore = formData.activity_level ? calculateActivityScore(formData.activity_level) : null;
 
     const fetchMetrics = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -115,23 +139,34 @@ export default function HealthPage() {
         setSaving(true);
         const supabase = createClient();
 
-        const { error } = await supabase.from('health_metrics').upsert({
+        const recordData = {
             wallet_address: session.walletAddress.toLowerCase(),
             date: formData.date,
             sleep_hours: formData.sleep_hours || null,
+            bedtime: formData.bedtime || null,
+            sleep_regularity: formData.sleep_regularity || null,
             activity_level: formData.activity_level || null,
-            health_score: calculatedScore,
             meal_quality: formData.meal_quality || null,
             processed_food_level: formData.processed_food_level || null,
             water_intake: formData.water_intake || null,
+            stress_level: formData.stress_level || null,
+            motivation_level: formData.motivation_level || null,
+            mental_fatigue: formData.mental_fatigue || null,
+            alcohol_units: formData.alcohol_units || null,
+            smoking: formData.smoking,
+            screen_time: formData.screen_time || null,
             illness_status: formData.illness_status || null,
-        }, {
+            health_score: calculatedScore,
+        };
+
+        const { error } = await supabase.from('health_metrics').upsert(recordData, {
             onConflict: 'wallet_address,date',
         });
 
         if (!error) {
             setFormData(initialFormData);
             setShowForm(false);
+            setEditingId(null);
             fetchMetrics();
         }
         setSaving(false);
@@ -147,13 +182,28 @@ export default function HealthPage() {
         setFormData({
             date: metric.date,
             sleep_hours: metric.sleep_hours as SleepDuration || '',
-            activity_level: metric.activity_level as ActivityLevel || '',
+            bedtime: metric.bedtime || '',
+            sleep_regularity: metric.sleep_regularity || '',
+            activity_level: metric.activity_level || '',
             meal_quality: metric.meal_quality || '',
             processed_food_level: metric.processed_food_level || '',
             water_intake: metric.water_intake || '',
+            stress_level: metric.stress_level || '',
+            motivation_level: metric.motivation_level || '',
+            mental_fatigue: metric.mental_fatigue || '',
+            alcohol_units: metric.alcohol_units || '',
+            smoking: metric.smoking || false,
+            screen_time: metric.screen_time || '',
             illness_status: metric.illness_status || '',
         });
+        setEditingId(metric.id);
         setShowForm(true);
+    };
+
+    const handleCancel = () => {
+        setFormData(initialFormData);
+        setShowForm(false);
+        setEditingId(null);
     };
 
     const chartData = metrics
@@ -161,8 +211,6 @@ export default function HealthPage() {
         .reverse()
         .map((m) => ({
             date: m.date,
-            sleep: m.sleep_hours || 0,
-            activity: (m.activity_level || 3) * 20,
             score: m.health_score || 0,
         }));
 
@@ -181,11 +229,15 @@ export default function HealthPage() {
                 <div>
                     <h1 className="text-2xl font-bold">Health Metrics</h1>
                     <p className="text-slate-400 text-sm mt-1">
-                        Track your sleep, activity, nutrition, and overall health
+                        Track all aspects of your health with our 7-category scoring system
                     </p>
                 </div>
                 <button
-                    onClick={() => setShowForm(!showForm)}
+                    onClick={() => {
+                        setFormData(initialFormData);
+                        setEditingId(null);
+                        setShowForm(!showForm);
+                    }}
                     className="btn btn-primary"
                 >
                     <Plus className="w-4 h-4" />
@@ -196,9 +248,16 @@ export default function HealthPage() {
             {/* Form */}
             {showForm && (
                 <div className="glass-dark rounded-2xl p-6 slide-in">
-                    <h3 className="text-lg font-semibold mb-4">New Entry</h3>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* Row 1: Date */}
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">
+                            {editingId ? 'Edit Entry' : 'New Entry'}
+                        </h3>
+                        <button onClick={handleCancel} className="p-2 rounded-lg hover:bg-slate-700/50 text-slate-400">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* Date */}
                         <div>
                             <label className="block text-sm text-slate-400 mb-2">Date</label>
                             <input
@@ -210,109 +269,121 @@ export default function HealthPage() {
                             />
                         </div>
 
-                        {/* Row 2: Sleep Duration (Dropdown) */}
-                        <div className="grid md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">
-                                    Sleep Duration
-                                    <span className="ml-2 text-xs text-slate-500">(7–9 hours is optimal for adults)</span>
-                                </label>
-                                <select
-                                    value={formData.sleep_hours}
-                                    onChange={(e) => setFormData({
-                                        ...formData,
-                                        sleep_hours: e.target.value ? parseFloat(e.target.value) as SleepDuration : ''
-                                    })}
-                                    className="w-full"
-                                >
-                                    <option value="">Select sleep duration</option>
-                                    {SLEEP_OPTIONS.map((opt) => (
-                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                    ))}
-                                </select>
+                        {/* Section 1 & 2: Sleep */}
+                        <div className="p-4 bg-violet-500/10 rounded-xl border border-violet-500/20">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Moon className="w-5 h-5 text-violet-400" />
+                                <h4 className="font-medium text-violet-300">Sleep (25%)</h4>
                             </div>
-                            <div className="flex items-end">
-                                {currentSleepScore !== null && (
-                                    <div className={`
-                                        px-4 py-2 rounded-lg text-sm font-medium
-                                        ${currentSleepScore >= 85 ? 'bg-emerald-500/20 text-emerald-400' :
-                                            currentSleepScore >= 65 ? 'bg-amber-500/20 text-amber-400' :
-                                                'bg-red-500/20 text-red-400'}
-                                    `}>
-                                        Sleep score: {currentSleepScore}/100
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Row 3: Activity Level (Dropdown with numbers) */}
-                        <div className="grid md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Activity Level</label>
-                                <select
-                                    value={formData.activity_level}
-                                    onChange={(e) => setFormData({
-                                        ...formData,
-                                        activity_level: e.target.value ? parseInt(e.target.value) as ActivityLevel : ''
-                                    })}
-                                    className="w-full"
-                                >
-                                    <option value="">Select activity level</option>
-                                    {([1, 2, 3, 4, 5] as ActivityLevel[]).map((level) => (
-                                        <option key={level} value={level}>{ACTIVITY_LABELS[level]}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                                {currentActivityScore !== null && (
-                                    <div className={`
-                                        px-4 py-2 rounded-lg text-sm font-medium
-                                        ${currentActivityScore >= 100 ? 'bg-emerald-500/20 text-emerald-400' :
-                                            currentActivityScore >= 80 ? 'bg-sky-500/20 text-sky-400' :
-                                                currentActivityScore >= 40 ? 'bg-amber-500/20 text-amber-400' :
-                                                    'bg-red-500/20 text-red-400'}
-                                    `}>
-                                        Activity score: {currentActivityScore}/100
-                                    </div>
-                                )}
-                                {formData.activity_level === 4 && (
-                                    <span className="text-xs text-emerald-400">Optimal and sustainable activity level.</span>
-                                )}
-                                {formData.activity_level === 5 && (
-                                    <span className="text-xs text-amber-400">High intensity increases physical stress and requires recovery.</span>
-                                )}
+                            <div className="grid md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-2">Duration (10%)</label>
+                                    <select
+                                        value={formData.sleep_hours}
+                                        onChange={(e) => setFormData({
+                                            ...formData,
+                                            sleep_hours: e.target.value ? parseFloat(e.target.value) as SleepDuration : ''
+                                        })}
+                                        className="w-full"
+                                    >
+                                        <option value="">Select</option>
+                                        {SLEEP_OPTIONS.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-2">Bedtime (15%)</label>
+                                    <select
+                                        value={formData.bedtime}
+                                        onChange={(e) => setFormData({ ...formData, bedtime: e.target.value })}
+                                        className="w-full"
+                                    >
+                                        <option value="">Select</option>
+                                        {BEDTIME_OPTIONS.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-2">Regularity</label>
+                                    <select
+                                        value={formData.sleep_regularity}
+                                        onChange={(e) => setFormData({ ...formData, sleep_regularity: e.target.value as SleepRegularity | '' })}
+                                        className="w-full"
+                                    >
+                                        <option value="">Select</option>
+                                        {(Object.keys(REGULARITY_LABELS) as SleepRegularity[]).map((key) => (
+                                            <option key={key} value={key}>{REGULARITY_LABELS[key]}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Row 4: Nutrition */}
-                        <div className="grid md:grid-cols-3 gap-4">
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Meal Quality</label>
-                                <select
-                                    value={formData.meal_quality}
-                                    onChange={(e) => setFormData({ ...formData, meal_quality: e.target.value as MealQuality | '' })}
-                                    className="w-full"
-                                >
-                                    <option value="">Select</option>
-                                    <option value="poor">Poor</option>
-                                    <option value="normal">Normal</option>
-                                    <option value="good">Good</option>
-                                </select>
+                        {/* Section 3: Physical Activity */}
+                        <div className="p-4 bg-sky-500/10 rounded-xl border border-sky-500/20">
+                            <div className="flex items-center gap-2 mb-4">
+                                <ActivityIcon className="w-5 h-5 text-sky-400" />
+                                <h4 className="font-medium text-sky-300">Physical Activity (20%)</h4>
                             </div>
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-2">Processed Food</label>
-                                <select
-                                    value={formData.processed_food_level}
-                                    onChange={(e) => setFormData({ ...formData, processed_food_level: e.target.value as ProcessedFoodLevel | '' })}
-                                    className="w-full"
-                                >
-                                    <option value="">Select</option>
-                                    <option value="high">High</option>
-                                    <option value="medium">Medium</option>
-                                    <option value="low">Low</option>
-                                </select>
+                            <select
+                                value={formData.activity_level}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    activity_level: e.target.value ? parseInt(e.target.value) as ActivityLevel : ''
+                                })}
+                                className="w-full md:w-1/2"
+                            >
+                                <option value="">Select activity level</option>
+                                {([1, 2, 3, 4, 5] as ActivityLevel[]).map((level) => (
+                                    <option key={level} value={level}>{ACTIVITY_LABELS[level]}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Section 4 & 5: Nutrition & Hydration */}
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div className="p-4 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Utensils className="w-5 h-5 text-amber-400" />
+                                    <h4 className="font-medium text-amber-300">Nutrition (20%)</h4>
+                                </div>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-sm text-slate-400 mb-2">Meal Quality</label>
+                                        <select
+                                            value={formData.meal_quality}
+                                            onChange={(e) => setFormData({ ...formData, meal_quality: e.target.value as MealQuality | '' })}
+                                            className="w-full"
+                                        >
+                                            <option value="">Select</option>
+                                            <option value="poor">Poor</option>
+                                            <option value="normal">Normal</option>
+                                            <option value="good">Good</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-slate-400 mb-2">Processed Food</label>
+                                        <select
+                                            value={formData.processed_food_level}
+                                            onChange={(e) => setFormData({ ...formData, processed_food_level: e.target.value as ProcessedFoodLevel | '' })}
+                                            className="w-full"
+                                        >
+                                            <option value="">Select</option>
+                                            <option value="low">Low</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="high">High</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
+
+                            <div className="p-4 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Droplets className="w-5 h-5 text-cyan-400" />
+                                    <h4 className="font-medium text-cyan-300">Hydration (10%)</h4>
+                                </div>
                                 <label className="block text-sm text-slate-400 mb-2">Water Intake</label>
                                 <select
                                     value={formData.water_intake}
@@ -320,17 +391,113 @@ export default function HealthPage() {
                                     className="w-full"
                                 >
                                     <option value="">Select</option>
-                                    <option value="low">Low</option>
-                                    <option value="adequate">Adequate</option>
-                                    <option value="good">Good</option>
+                                    <option value="low">Low (&lt;1.5L)</option>
+                                    <option value="adequate">Adequate (1.5–2.5L)</option>
+                                    <option value="good">Good (2.5–3.5L)</option>
                                 </select>
                             </div>
                         </div>
 
-                        {/* Row 5: Illness + Calculated Score */}
+                        {/* Section 6: Mental State */}
+                        <div className="p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Brain className="w-5 h-5 text-purple-400" />
+                                <h4 className="font-medium text-purple-300">Mental State (15%)</h4>
+                            </div>
+                            <div className="grid md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-2">Stress Level</label>
+                                    <select
+                                        value={formData.stress_level}
+                                        onChange={(e) => setFormData({ ...formData, stress_level: e.target.value as StressLevel | '' })}
+                                        className="w-full"
+                                    >
+                                        <option value="">Select</option>
+                                        {(Object.keys(STRESS_LABELS) as StressLevel[]).map((key) => (
+                                            <option key={key} value={key}>{STRESS_LABELS[key]}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-2">Motivation</label>
+                                    <select
+                                        value={formData.motivation_level}
+                                        onChange={(e) => setFormData({ ...formData, motivation_level: e.target.value as MotivationLevel | '' })}
+                                        className="w-full"
+                                    >
+                                        <option value="">Select</option>
+                                        {(Object.keys(MOTIVATION_LABELS) as MotivationLevel[]).map((key) => (
+                                            <option key={key} value={key}>{MOTIVATION_LABELS[key]}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-2">Mental Fatigue</label>
+                                    <select
+                                        value={formData.mental_fatigue}
+                                        onChange={(e) => setFormData({ ...formData, mental_fatigue: e.target.value as FatigueLevel | '' })}
+                                        className="w-full"
+                                    >
+                                        <option value="">Select</option>
+                                        {(Object.keys(FATIGUE_LABELS) as FatigueLevel[]).map((key) => (
+                                            <option key={key} value={key}>{FATIGUE_LABELS[key]}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 7: Extras */}
+                        <div className="p-4 bg-rose-500/10 rounded-xl border border-rose-500/20">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Wine className="w-5 h-5 text-rose-400" />
+                                <h4 className="font-medium text-rose-300">Extras (10%)</h4>
+                            </div>
+                            <div className="grid md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-2">Alcohol</label>
+                                    <select
+                                        value={formData.alcohol_units}
+                                        onChange={(e) => setFormData({ ...formData, alcohol_units: e.target.value as AlcoholLevel | '' })}
+                                        className="w-full"
+                                    >
+                                        <option value="">Select</option>
+                                        {(Object.keys(ALCOHOL_LABELS) as AlcoholLevel[]).map((key) => (
+                                            <option key={key} value={key}>{ALCOHOL_LABELS[key]}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-2">Screen Time</label>
+                                    <select
+                                        value={formData.screen_time}
+                                        onChange={(e) => setFormData({ ...formData, screen_time: e.target.value as ScreenTime | '' })}
+                                        className="w-full"
+                                    >
+                                        <option value="">Select</option>
+                                        {(Object.keys(SCREEN_TIME_LABELS) as ScreenTime[]).map((key) => (
+                                            <option key={key} value={key}>{SCREEN_TIME_LABELS[key]}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.smoking}
+                                            onChange={(e) => setFormData({ ...formData, smoking: e.target.checked })}
+                                            className="w-5 h-5 rounded bg-slate-700 border-slate-600"
+                                        />
+                                        <span className="text-sm text-slate-400">Smoked today</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Illness Status */}
                         <div className="grid md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm text-slate-400 mb-2">Illness Status</label>
+                                <label className="block text-sm text-slate-400 mb-2">Illness Status (Penalty)</label>
                                 <select
                                     value={formData.illness_status}
                                     onChange={(e) => setFormData({ ...formData, illness_status: e.target.value as IllnessStatus | '' })}
@@ -338,10 +505,12 @@ export default function HealthPage() {
                                 >
                                     <option value="">Select</option>
                                     <option value="none">None</option>
-                                    <option value="mild">Mild</option>
-                                    <option value="severe">Severe</option>
+                                    <option value="mild">Mild (-10)</option>
+                                    <option value="severe">Severe (-25)</option>
                                 </select>
                             </div>
+
+                            {/* Health Score Preview */}
                             <div className="relative">
                                 <label className="block text-sm text-slate-400 mb-2 flex items-center gap-2">
                                     Health Score
@@ -359,49 +528,51 @@ export default function HealthPage() {
                                         calculatedScore >= 40 ? 'bg-amber-500/20 text-amber-400' :
                                             'bg-red-500/20 text-red-400'}
                                 `}>
-                                    {calculatedScore}/100
+                                    {calculatedScore}/100 ({getHealthStateLabel(calculatedScore)})
                                 </div>
 
                                 {/* Tooltip */}
                                 {showTooltip && (
-                                    <div className="absolute top-full left-0 mt-2 p-4 bg-slate-800 rounded-xl shadow-xl border border-slate-700 z-50 w-72">
+                                    <div className="absolute top-full left-0 mt-2 p-4 bg-slate-800 rounded-xl shadow-xl border border-slate-700 z-50 w-80">
                                         <div className="flex items-center justify-between mb-3">
-                                            <span className="font-semibold text-sm">How is this calculated?</span>
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowTooltip(false)}
-                                                className="text-slate-500 hover:text-white"
-                                            >
+                                            <span className="font-semibold text-sm">Score Breakdown</span>
+                                            <button type="button" onClick={() => setShowTooltip(false)} className="text-slate-500 hover:text-white">
                                                 <X className="w-4 h-4" />
                                             </button>
                                         </div>
                                         <div className="space-y-2 text-sm">
                                             <div className="flex justify-between">
-                                                <span className="text-slate-400">Sleep (×0.40)</span>
-                                                <span className="text-violet-400">{scoreBreakdown.sleepScore}</span>
+                                                <span className="text-violet-400">Sleep Duration (10%)</span>
+                                                <span>{scoreBreakdown.sleepDurationScore} → {scoreBreakdown.weightedScores.sleepDuration.toFixed(1)}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-slate-400">Activity (×0.30)</span>
-                                                <span className="text-sky-400">{scoreBreakdown.activityScore}</span>
+                                                <span className="text-violet-400">Sleep Timing (15%)</span>
+                                                <span>{scoreBreakdown.sleepTimingScore} → {scoreBreakdown.weightedScores.sleepTiming.toFixed(1)}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-slate-400">Nutrition (×0.30)</span>
-                                                <span className="text-amber-400">{scoreBreakdown.nutritionScore}</span>
+                                                <span className="text-sky-400">Activity (20%)</span>
+                                                <span>{scoreBreakdown.activityScore} → {scoreBreakdown.weightedScores.activity.toFixed(1)}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-slate-400">Illness Penalty</span>
-                                                <span className="text-red-400">-{scoreBreakdown.illnessPenalty}</span>
+                                                <span className="text-amber-400">Nutrition (20%)</span>
+                                                <span>{scoreBreakdown.nutritionScore} → {scoreBreakdown.weightedScores.nutrition.toFixed(1)}</span>
                                             </div>
-                                            {scoreBreakdown.recoveryState === 'recovering' && (
-                                                <div className="flex justify-between">
-                                                    <span className="text-orange-400">High Activity Load</span>
-                                                    <span className="text-orange-400">{scoreBreakdown.activityLoad.toFixed(1)}/5</span>
-                                                </div>
-                                            )}
-                                            {scoreBreakdown.recoveryBonus > 0 && (
-                                                <div className="flex justify-between">
-                                                    <span className="text-emerald-400">Recovery Bonus</span>
-                                                    <span className="text-emerald-400">+{scoreBreakdown.recoveryBonus}</span>
+                                            <div className="flex justify-between">
+                                                <span className="text-cyan-400">Hydration (10%)</span>
+                                                <span>{scoreBreakdown.hydrationScore} → {scoreBreakdown.weightedScores.hydration.toFixed(1)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-purple-400">Mental State (15%)</span>
+                                                <span>{scoreBreakdown.mentalScore} → {scoreBreakdown.weightedScores.mentalState.toFixed(1)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-rose-400">Extras (10%)</span>
+                                                <span>{scoreBreakdown.extrasScore} → {scoreBreakdown.weightedScores.extras.toFixed(1)}</span>
+                                            </div>
+                                            {scoreBreakdown.illnessPenalty > 0 && (
+                                                <div className="flex justify-between text-red-400">
+                                                    <span>Illness Penalty</span>
+                                                    <span>-{scoreBreakdown.illnessPenalty}</span>
                                                 </div>
                                             )}
                                             <div className="border-t border-slate-700 pt-2 mt-2 flex justify-between font-semibold">
@@ -414,47 +585,13 @@ export default function HealthPage() {
                             </div>
                         </div>
 
-                        {/* High Activity Load Warning */}
-                        {scoreBreakdown.recoveryState === 'recovering' && (
-                            <div className="flex items-start gap-3 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
-                                <ActivityIcon className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
-                                <div>
-                                    <p className="text-sm text-orange-300 font-medium">High activity load detected</p>
-                                    <p className="text-xs text-orange-400/70 mt-1">
-                                        Your 3-day average activity is {scoreBreakdown.activityLoad.toFixed(1)}/5. Consider a moderate day (level 3) to recover and earn a bonus.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Recovery Bonus Message */}
-                        {scoreBreakdown.recoveryBonus > 0 && (
-                            <div className="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                                <Heart className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-                                <div>
-                                    <p className="text-sm text-emerald-300 font-medium">Great recovery choice!</p>
-                                    <p className="text-xs text-emerald-400/70 mt-1">
-                                        Taking a moderate activity day after high load helps your body recover. +5 bonus applied!
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-
                         {/* Actions */}
                         <div className="flex justify-end gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setShowForm(false)}
-                                className="btn btn-secondary"
-                            >
+                            <button type="button" onClick={handleCancel} className="btn btn-secondary">
                                 Cancel
                             </button>
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="btn btn-primary"
-                            >
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+                            <button type="submit" disabled={saving} className="btn btn-primary">
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingId ? 'Update' : 'Save')}
                             </button>
                         </div>
                     </form>
@@ -466,13 +603,28 @@ export default function HealthPage() {
                 <div className="grid md:grid-cols-3 gap-4">
                     <div className="glass-dark rounded-xl p-5">
                         <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                <Heart className="w-5 h-5 text-emerald-400" />
+                            </div>
+                            <span className="text-slate-400">Avg Health Score</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <p className="text-3xl font-bold">
+                                {(metrics.reduce((sum, m) => sum + (m.health_score || 0), 0) / metrics.filter(m => m.health_score).length || 0).toFixed(0)}
+                            </p>
+                            <span className="text-lg text-slate-500">/100</span>
+                        </div>
+                    </div>
+
+                    <div className="glass-dark rounded-xl p-5">
+                        <div className="flex items-center gap-3 mb-3">
                             <div className="w-10 h-10 rounded-lg bg-violet-500/20 flex items-center justify-center">
                                 <Moon className="w-5 h-5 text-violet-400" />
                             </div>
                             <span className="text-slate-400">Avg Sleep</span>
                         </div>
                         <p className="text-3xl font-bold">
-                            {(metrics.reduce((sum, m) => sum + Number(m.sleep_hours || 0), 0) / metrics.filter(m => m.sleep_hours).length || 0).toFixed(1)}
+                            {(metrics.reduce((sum, m) => sum + (m.sleep_hours || 0), 0) / metrics.filter(m => m.sleep_hours).length || 0).toFixed(1)}
                             <span className="text-lg text-slate-500 ml-1">hrs</span>
                         </p>
                     </div>
@@ -485,52 +637,23 @@ export default function HealthPage() {
                             <span className="text-slate-400">Avg Activity</span>
                         </div>
                         <p className="text-3xl font-bold">
-                            {(metrics.reduce((sum, m) => sum + Number(m.activity_level || 0), 0) / metrics.filter(m => m.activity_level).length || 0).toFixed(1)}
+                            {(metrics.reduce((sum, m) => sum + (m.activity_level || 0), 0) / metrics.filter(m => m.activity_level).length || 0).toFixed(1)}
                             <span className="text-lg text-slate-500 ml-1">/5</span>
                         </p>
                     </div>
-
-                    <div className="glass-dark rounded-xl p-5">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                                <Heart className="w-5 h-5 text-emerald-400" />
-                            </div>
-                            <span className="text-slate-400">Avg Score</span>
-                        </div>
-                        <p className="text-3xl font-bold">
-                            {(metrics.reduce((sum, m) => sum + Number(m.health_score || 0), 0) / metrics.filter(m => m.health_score).length || 0).toFixed(0)}
-                            <span className="text-lg text-slate-500 ml-1">/100</span>
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            {/* Chart */}
-            {chartData.length > 0 && (
-                <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Trend Chart</h3>
-                    <TimeSeriesChart
-                        data={chartData}
-                        lines={[
-                            { dataKey: 'sleep', name: 'Sleep (hrs)', color: '#8b5cf6' },
-                            { dataKey: 'activity', name: 'Activity', color: '#38bdf8' },
-                        ]}
-                        height={300}
-                    />
                 </div>
             )}
 
             {/* Health Score Chart */}
             {chartData.length > 0 && (
                 <div className="glass-dark rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Health Score</h3>
+                    <h3 className="text-lg font-semibold mb-4">Health Score Trend</h3>
                     <TimeSeriesChart
                         data={chartData}
                         lines={[
                             { dataKey: 'score', name: 'Health Score', color: '#10b981' },
                         ]}
-                        height={250}
-                        showLegend={false}
+                        height={300}
                     />
                 </div>
             )}
@@ -550,8 +673,7 @@ export default function HealthPage() {
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Date</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Sleep</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Activity</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Nutrition</th>
-                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Illness</th>
+                                    <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Mental</th>
                                     <th className="px-4 py-3 text-left text-sm text-slate-400 font-medium">Score</th>
                                     <th className="px-4 py-3"></th>
                                 </tr>
@@ -563,29 +685,16 @@ export default function HealthPage() {
                                         <td className="px-4 py-3 text-sm">{metric.sleep_hours || '-'} hrs</td>
                                         <td className="px-4 py-3 text-sm">{metric.activity_level || '-'}/5</td>
                                         <td className="px-4 py-3 text-sm">
-                                            {metric.meal_quality ? (
+                                            {metric.stress_level ? (
                                                 <span className={`
                                                     px-2 py-1 rounded-full text-xs font-medium
-                                                    ${metric.meal_quality === 'good' ? 'bg-emerald-500/20 text-emerald-400' :
-                                                        metric.meal_quality === 'normal' ? 'bg-amber-500/20 text-amber-400' :
+                                                    ${metric.stress_level === 'calm' ? 'bg-emerald-500/20 text-emerald-400' :
+                                                        metric.stress_level === 'mild' ? 'bg-amber-500/20 text-amber-400' :
                                                             'bg-red-500/20 text-red-400'}
                                                 `}>
-                                                    {metric.meal_quality}
+                                                    {STRESS_LABELS[metric.stress_level]}
                                                 </span>
                                             ) : '-'}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm">
-                                            {metric.illness_status && metric.illness_status !== 'none' ? (
-                                                <span className={`
-                                                    px-2 py-1 rounded-full text-xs font-medium
-                                                    ${metric.illness_status === 'mild' ? 'bg-amber-500/20 text-amber-400' :
-                                                        'bg-red-500/20 text-red-400'}
-                                                `}>
-                                                    {metric.illness_status}
-                                                </span>
-                                            ) : (
-                                                <span className="text-slate-500">None</span>
-                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             <span className={`

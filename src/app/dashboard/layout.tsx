@@ -27,12 +27,12 @@ import { useTheme } from '@/lib/theme/ThemeContext';
 const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Health', href: '/dashboard/health', icon: Activity },
-    { name: 'Psychology', href: '/dashboard/psychology', icon: Brain },
     { name: 'Net Worth', href: '/dashboard/networth', icon: Wallet },
     { name: 'Income', href: '/dashboard/income', icon: TrendingUp },
     { name: 'Expenses', href: '/dashboard/expenses', icon: TrendingDown },
     { name: 'Investments', href: '/dashboard/investments', icon: PiggyBank },
 ];
+
 
 export default function DashboardLayout({
     children,

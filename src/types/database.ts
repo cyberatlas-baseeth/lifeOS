@@ -23,21 +23,41 @@ export type WaterIntake = 'low' | 'adequate' | 'good';
 export type IllnessStatus = 'none' | 'mild' | 'severe';
 export type ActivityLevel = 1 | 2 | 3 | 4 | 5;
 
-// Psychology types (English only)
+// Psychology types (now part of Health)
 export type StressLevel = 'calm' | 'mild' | 'high';
 export type MotivationLevel = 'high' | 'medium' | 'low';
 export type FatigueLevel = 'fresh' | 'tired' | 'exhausted';
+
+// New types for extended health tracking
+export type SleepRegularity = 'consistent' | 'slight_variation' | 'irregular';
+export type AlcoholLevel = 'none' | 'light' | 'moderate' | 'heavy';
+export type ScreenTime = 'low' | 'moderate' | 'high';
 
 export interface HealthMetric {
     id: string;
     wallet_address: string;
     date: string;
+    // Sleep (10% + 15%)
     sleep_hours: number | null;
+    bedtime: string | null;           // HH:MM format
+    sleep_regularity: SleepRegularity | null;
+    // Physical Activity (20%)
     activity_level: ActivityLevel | null;
-    health_score: number | null;
+    // Nutrition (20%)
     meal_quality: MealQuality | null;
     processed_food_level: ProcessedFoodLevel | null;
+    // Hydration (10%)
     water_intake: WaterIntake | null;
+    // Mental State (15%) - merged from Psychology
+    stress_level: StressLevel | null;
+    motivation_level: MotivationLevel | null;
+    mental_fatigue: FatigueLevel | null;
+    // Extras (10%)
+    alcohol_units: AlcoholLevel | null;
+    smoking: boolean | null;
+    screen_time: ScreenTime | null;
+    // Score and meta
+    health_score: number | null;
     illness_status: IllnessStatus | null;
     notes: string | null;
     created_at: string;
