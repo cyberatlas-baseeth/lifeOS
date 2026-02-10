@@ -40,6 +40,7 @@ export default function TargetAssetsPage() {
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formData, setFormData] = useState<FormData>(initialFormData);
+    const [error, setError] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
         if (!session?.walletAddress) return;
@@ -56,8 +57,12 @@ export default function TargetAssetsPage() {
             calculateNetWorth(session.walletAddress),
         ]);
 
+        console.log('Targets fetch result:', targetsResult);
+
         if (!targetsResult.error && targetsResult.data) {
             setTargets(targetsResult.data);
+        } else if (targetsResult.error) {
+            console.error('Error fetching targets:', targetsResult.error);
         }
         setNetWorth(nwResult.summary);
         setLoading(false);
@@ -80,31 +85,49 @@ export default function TargetAssetsPage() {
         if (!session?.walletAddress || !formData.category || !formData.target_value_try) return;
 
         setSaving(true);
-        const supabase = createClient();
-        const rateData = await getUSDTRYRate();
-        const valueTRY = parseFloat(formData.target_value_try);
-        const valueUSD = convertTRYtoUSD(valueTRY, rateData.rate);
+        setError(null);
 
-        const record = {
-            wallet_address: session.walletAddress.toLowerCase(),
-            name: formData.name,
-            category: formData.category,
-            target_value_try: valueTRY,
-            target_value_usd: valueUSD,
-            exchange_rate_usd_try: rateData.rate,
-        };
+        try {
+            const supabase = createClient();
+            const rateData = await getUSDTRYRate();
+            const valueTRY = parseFloat(formData.target_value_try);
+            const valueUSD = convertTRYtoUSD(valueTRY, rateData.rate);
 
-        if (editingId) {
-            await supabase.from('target_assets').update(record).eq('id', editingId);
-        } else {
-            await supabase.from('target_assets').insert(record);
+            const record = {
+                wallet_address: session.walletAddress.toLowerCase(),
+                name: formData.name,
+                category: formData.category,
+                target_value_try: valueTRY,
+                target_value_usd: valueUSD,
+                exchange_rate_usd_try: rateData.rate,
+            };
+
+            let result;
+            if (editingId) {
+                result = await supabase.from('target_assets').update(record).eq('id', editingId).select();
+            } else {
+                result = await supabase.from('target_assets').insert(record).select();
+            }
+
+            console.log('Save result:', result);
+
+            if (result.error) {
+                console.error('Supabase error:', result.error);
+                setError(`Failed to save: ${result.error.message}`);
+                setSaving(false);
+                return;
+            }
+
+            setFormData(initialFormData);
+            setShowForm(false);
+            setEditingId(null);
+            setSaving(false);
+            fetchData();
+        } catch (err) {
+            console.error('Error saving target:', err);
+            setError(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            setSaving(false);
         }
-
-        setFormData(initialFormData);
-        setShowForm(false);
-        setEditingId(null);
-        setSaving(false);
-        fetchData();
     };
 
     const handleDelete = async (id: string) => {
@@ -230,6 +253,11 @@ export default function TargetAssetsPage() {
                                 />
                             </div>
                         </div>
+                        {error && (
+                            <div className="p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">
+                                {error}
+                            </div>
+                        )}
                         <p className="text-xs text-slate-500">
                             💡 Progress is automatically calculated from your current net worth.
                         </p>
@@ -268,22 +296,22 @@ export default function TargetAssetsPage() {
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="flex items-center gap-3">
                                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${config.color === 'emerald' ? 'bg-emerald-500/20' :
-                                                config.color === 'sky' ? 'bg-sky-500/20' :
-                                                    config.color === 'violet' ? 'bg-violet-500/20' :
-                                                        'bg-amber-500/20'
+                                            config.color === 'sky' ? 'bg-sky-500/20' :
+                                                config.color === 'violet' ? 'bg-violet-500/20' :
+                                                    'bg-amber-500/20'
                                             }`}>
                                             <Icon className={`w-6 h-6 ${config.color === 'emerald' ? 'text-emerald-400' :
-                                                    config.color === 'sky' ? 'text-sky-400' :
-                                                        config.color === 'violet' ? 'text-violet-400' :
-                                                            'text-amber-400'
+                                                config.color === 'sky' ? 'text-sky-400' :
+                                                    config.color === 'violet' ? 'text-violet-400' :
+                                                        'text-amber-400'
                                                 }`} />
                                         </div>
                                         <div>
                                             <h3 className="font-semibold text-lg">{asset.name}</h3>
                                             <span className={`text-xs px-2 py-1 rounded-full ${config.color === 'emerald' ? 'bg-emerald-500/20 text-emerald-400' :
-                                                    config.color === 'sky' ? 'bg-sky-500/20 text-sky-400' :
-                                                        config.color === 'violet' ? 'bg-violet-500/20 text-violet-400' :
-                                                            'bg-amber-500/20 text-amber-400'
+                                                config.color === 'sky' ? 'bg-sky-500/20 text-sky-400' :
+                                                    config.color === 'violet' ? 'bg-violet-500/20 text-violet-400' :
+                                                        'bg-amber-500/20 text-amber-400'
                                                 }`}>
                                                 {config.label}
                                             </span>
@@ -314,8 +342,8 @@ export default function TargetAssetsPage() {
                                             {formatTRY(currentNetWorthTRY)} / {formatTRY(asset.target_value_try)}
                                         </span>
                                         <span className={`text-lg font-bold ${isComplete ? 'text-emerald-400' :
-                                                progress >= 50 ? 'text-sky-400' :
-                                                    progress >= 25 ? 'text-amber-400' : 'text-red-400'
+                                            progress >= 50 ? 'text-sky-400' :
+                                                progress >= 25 ? 'text-amber-400' : 'text-red-400'
                                             }`}>
                                             {progress.toFixed(1)}%
                                         </span>
@@ -329,8 +357,8 @@ export default function TargetAssetsPage() {
                                 <div className="w-full h-3 bg-slate-700/50 rounded-full overflow-hidden">
                                     <div
                                         className={`h-full rounded-full transition-all duration-700 ease-out ${isComplete ? 'bg-emerald-500' :
-                                                progress >= 50 ? 'bg-sky-500' :
-                                                    progress >= 25 ? 'bg-amber-500' : 'bg-red-500'
+                                            progress >= 50 ? 'bg-sky-500' :
+                                                progress >= 25 ? 'bg-amber-500' : 'bg-red-500'
                                             }`}
                                         style={{ width: `${Math.min(100, progress)}%` }}
                                     />
