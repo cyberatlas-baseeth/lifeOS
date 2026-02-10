@@ -160,6 +160,20 @@ export interface Investment {
     amount_usd?: number;
 }
 
+// Target Asset types
+export type TargetAssetCategory = 'house' | 'car' | 'travel' | 'other';
+
+export interface TargetAsset {
+    id: string;
+    wallet_address: string;
+    name: string;
+    category: TargetAssetCategory;
+    target_value_try: number;
+    target_value_usd: number;
+    exchange_rate_usd_try: number;
+    created_at: string;
+}
+
 // Form input types (for creating/updating)
 export type HealthMetricInput = Omit<HealthMetric, 'id' | 'wallet_address' | 'created_at'>;
 export type PsychologyMetricInput = Omit<PsychologyMetric, 'id' | 'wallet_address' | 'created_at'>;
@@ -167,6 +181,7 @@ export type NetWorthInput = Omit<NetWorth, 'id' | 'wallet_address' | 'created_at
 export type IncomeInput = Omit<Income, 'id' | 'wallet_address' | 'created_at'>;
 export type ExpenseInput = Omit<Expense, 'id' | 'wallet_address' | 'created_at'>;
 export type InvestmentInput = Omit<Investment, 'id' | 'wallet_address' | 'created_at'>;
+export type TargetAssetInput = Omit<TargetAsset, 'id' | 'wallet_address' | 'created_at'>;
 
 // Avatar state types
 export type AvatarStatus = 'thriving' | 'energetic' | 'stable' | 'tired' | 'stressed' | 'critical' | 'sick';
@@ -261,6 +276,11 @@ export interface Database {
                 Row: Investment;
                 Insert: Omit<Investment, 'id' | 'created_at'>;
                 Update: Partial<Omit<Investment, 'id' | 'wallet_address' | 'created_at'>>;
+            };
+            target_assets: {
+                Row: TargetAsset;
+                Insert: Omit<TargetAsset, 'id' | 'created_at'>;
+                Update: Partial<Omit<TargetAsset, 'id' | 'wallet_address' | 'created_at'>>;
             };
         };
     };

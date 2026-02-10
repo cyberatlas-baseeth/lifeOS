@@ -12,6 +12,7 @@ import {
     TrendingUp,
     TrendingDown,
     PiggyBank,
+    Target,
     LogOut,
     Menu,
     X,
@@ -31,7 +32,9 @@ const navigation = [
     { name: 'Income', href: '/dashboard/income', icon: TrendingUp },
     { name: 'Expenses', href: '/dashboard/expenses', icon: TrendingDown },
     { name: 'Investments', href: '/dashboard/investments', icon: PiggyBank },
+    { name: 'Targets', href: '/dashboard/targets', icon: Target },
 ];
+
 
 
 export default function DashboardLayout({
