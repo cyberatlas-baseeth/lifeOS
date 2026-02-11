@@ -16,7 +16,7 @@ import {
     Wallet,
     TrendingUp,
     TrendingDown,
-    PiggyBank,
+    Landmark,
 } from 'lucide-react';
 import { subDays } from 'date-fns';
 
@@ -272,7 +272,7 @@ export default function DashboardPage() {
                         ? formatCurrency(metrics.finance.investmentProfitLoss)
                         : '-'}
                     subtitle="Last 30 days"
-                    icon={PiggyBank}
+                    icon={Landmark}
                     color={metrics.finance?.investmentProfitLoss && metrics.finance.investmentProfitLoss >= 0 ? 'emerald' : 'red'}
                     href="/dashboard/investments"
                 />

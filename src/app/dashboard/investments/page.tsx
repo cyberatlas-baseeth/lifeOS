@@ -8,7 +8,7 @@ import { formatDate, formatDateForInput } from '@/lib/utils';
 import { getUSDTRYRate, convertTRYtoUSD, formatTRY, formatUSDSecondary } from '@/lib/currency';
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
 import LiveExchangeRate from '@/components/ui/LiveExchangeRate';
-import { Plus, Trash2, PiggyBank, TrendingUp, TrendingDown, Loader2, Lock, CheckCircle, X, Pencil } from 'lucide-react';
+import { Plus, Trash2, Landmark, TrendingUp, TrendingDown, Loader2, Lock, CheckCircle, X, Pencil } from 'lucide-react';
 
 const INVESTMENT_TYPES = [
     'Crypto',

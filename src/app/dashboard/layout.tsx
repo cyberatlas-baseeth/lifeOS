@@ -11,7 +11,7 @@ import {
     Wallet,
     TrendingUp,
     TrendingDown,
-    PiggyBank,
+    Landmark,
     Target,
     LogOut,
     Menu,
@@ -31,7 +31,7 @@ const navigation = [
     { name: 'Net Worth', href: '/dashboard/networth', icon: Wallet },
     { name: 'Income', href: '/dashboard/income', icon: TrendingUp },
     { name: 'Expenses', href: '/dashboard/expenses', icon: TrendingDown },
-    { name: 'Investments', href: '/dashboard/investments', icon: PiggyBank },
+    { name: 'Investments', href: '/dashboard/investments', icon: Landmark },
     { name: 'Targets', href: '/dashboard/targets', icon: Target },
 ];
 
