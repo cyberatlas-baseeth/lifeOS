@@ -31,6 +31,13 @@ const initialFormData: FormData = {
     target_value_try: '',
 };
 
+const formatWithDots = (value: string): string => {
+    const digits = value.replace(/\D/g, '');
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+const stripDots = (value: string): string => value.replace(/\./g, '');
+
 export default function TargetAssetsPage() {
     const { session } = useWallet();
     const [targets, setTargets] = useState<TargetAsset[]>([]);
@@ -90,7 +97,7 @@ export default function TargetAssetsPage() {
         try {
             const supabase = createClient();
             const rateData = await getUSDTRYRate();
-            const valueTRY = parseFloat(formData.target_value_try);
+            const valueTRY = parseFloat(stripDots(formData.target_value_try));
             const valueUSD = convertTRYtoUSD(valueTRY, rateData.rate);
 
             const record = {
@@ -140,7 +147,7 @@ export default function TargetAssetsPage() {
         setFormData({
             name: asset.name,
             category: asset.category,
-            target_value_try: asset.target_value_try.toString(),
+            target_value_try: formatWithDots(asset.target_value_try.toString()),
         });
         setEditingId(asset.id);
         setShowForm(true);
@@ -244,12 +251,12 @@ export default function TargetAssetsPage() {
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Target Value (₺ TRY)</label>
                                 <input
-                                    type="number"
+                                    type="text"
+                                    inputMode="numeric"
                                     value={formData.target_value_try}
-                                    onChange={(e) => setFormData({ ...formData, target_value_try: e.target.value })}
+                                    onChange={(e) => setFormData({ ...formData, target_value_try: formatWithDots(e.target.value) })}
                                     placeholder=""
                                     required
-                                    min="1"
                                 />
                             </div>
                         </div>
