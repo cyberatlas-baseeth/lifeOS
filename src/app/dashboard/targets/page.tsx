@@ -224,7 +224,7 @@ export default function TargetAssetsPage() {
                                     type="text"
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    placeholder="e.g. Dream House, Tesla Model 3"
+                                    placeholder=""
                                     required
                                 />
                             </div>
@@ -247,7 +247,7 @@ export default function TargetAssetsPage() {
                                     type="number"
                                     value={formData.target_value_try}
                                     onChange={(e) => setFormData({ ...formData, target_value_try: e.target.value })}
-                                    placeholder="e.g. 5000000"
+                                    placeholder=""
                                     required
                                     min="1"
                                 />
