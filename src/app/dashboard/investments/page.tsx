@@ -21,6 +21,13 @@ const INVESTMENT_TYPES = [
     'Other',
 ];
 
+const formatWithDots = (value: string): string => {
+    const digits = value.replace(/\D/g, '');
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+const stripDots = (value: string): string => value.replace(/\./g, '');
+
 export default function InvestmentsPage() {
     const { session } = useWallet();
     const [records, setRecords] = useState<Investment[]>([]);
@@ -76,7 +83,7 @@ export default function InvestmentsPage() {
         setFormData({
             date: record.date,
             investment_type: record.investment_type,
-            amount: String(record.invested_try || record.amount || ''),
+            amount: formatWithDots(String(record.invested_try || record.amount || '')),
         });
         setEditingId(record.id);
         setShowForm(true);
@@ -92,7 +99,7 @@ export default function InvestmentsPage() {
 
         try {
             const rateData = await getUSDTRYRate();
-            const investedTry = parseFloat(formData.amount);
+            const investedTry = parseFloat(stripDots(formData.amount));
 
             const supabase = createClient();
 
@@ -152,7 +159,7 @@ export default function InvestmentsPage() {
 
         try {
             const rateData = await getUSDTRYRate();
-            const realizedPlTry = parseFloat(claimAmount);
+            const realizedPlTry = parseFloat(stripDots(claimAmount));
 
             const supabase = createClient();
             const { error } = await supabase
@@ -303,11 +310,11 @@ export default function InvestmentsPage() {
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Amount (₺ TRY)</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
+                                    type="text"
+                                    inputMode="numeric"
                                     value={formData.amount}
-                                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                    placeholder="100000"
+                                    onChange={(e) => setFormData({ ...formData, amount: formatWithDots(e.target.value) })}
+                                    placeholder=""
                                     required
                                 />
                             </div>
@@ -359,11 +366,11 @@ export default function InvestmentsPage() {
                                     Realized Profit/Loss (₺ TRY)
                                 </label>
                                 <input
-                                    type="number"
-                                    step="0.01"
+                                    type="text"
+                                    inputMode="numeric"
                                     value={claimAmount}
-                                    onChange={(e) => setClaimAmount(e.target.value)}
-                                    placeholder="+5000 or -2000"
+                                    onChange={(e) => setClaimAmount(formatWithDots(e.target.value))}
+                                    placeholder=""
                                     className="w-full"
                                     autoFocus
                                 />

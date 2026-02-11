@@ -14,6 +14,13 @@ import { Plus, Trash2, TrendingUp, Briefcase, Gift, Loader2, Pencil, X } from 'l
 const REGULAR_INCOME_TAGS = ['salary'];
 const ADDITIONAL_INCOME_TAGS = ['crypto'];
 
+const formatWithDots = (value: string): string => {
+    const digits = value.replace(/\D/g, '');
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+const stripDots = (value: string): string => value.replace(/\./g, '');
+
 export default function IncomePage() {
     const { session } = useWallet();
     const [records, setRecords] = useState<Income[]>([]);
@@ -76,7 +83,7 @@ export default function IncomePage() {
             date: record.date,
             category: record.category,
             tag: record.tag || (record.category === 'regular' ? 'salary' : 'crypto'),
-            amount: String(record.amount_try || record.amount || ''),
+            amount: formatWithDots(String(record.amount_try || record.amount || '')),
         });
         setEditingId(record.id);
         setShowForm(true);
@@ -92,7 +99,7 @@ export default function IncomePage() {
 
         try {
             const rateData = await getUSDTRYRate();
-            const amountTry = parseFloat(formData.amount);
+            const amountTry = parseFloat(stripDots(formData.amount));
             const amountUsd = convertTRYtoUSD(amountTry, rateData.rate);
 
             const supabase = createClient();
@@ -280,12 +287,11 @@ export default function IncomePage() {
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Amount (₺ TRY)</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
+                                    type="text"
+                                    inputMode="numeric"
                                     value={formData.amount}
-                                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                    placeholder="25000"
+                                    onChange={(e) => setFormData({ ...formData, amount: formatWithDots(e.target.value) })}
+                                    placeholder=""
                                     required
                                 />
                             </div>
